@@ -105,10 +105,22 @@ def test_ruling_pedantic_is_invalid():
 
 def test_ruling_vague_halves_or_catches():
     from judge.base import rule
-    half = rule(_v(specificity=3, original_specificity=5), _v(specificity=3), judge="t", model=None)
+    half = rule(_v(specificity=3, original_specificity=5), _v(specificity=3, original_specificity=5),
+                judge="t", model=None)
     assert half.valid and half.vague and not half.vague_caught
-    caught = rule(_v(specificity=2, vagueness_flags=["added hedge: may"]), _v(), judge="t", model=None)
+    both = dict(specificity=2, vagueness_flags=["added hedge: may"])
+    caught = rule(_v(**both), _v(**both), judge="t", model=None)
     assert caught.valid and caught.vague_caught and caught.vagueness_flags == ["added hedge: may"]
+    assert caught.explanation.startswith("Too vague")
+
+
+def test_one_run_calling_it_vague_is_not_enough():
+    from judge.base import rule
+    # The night-shift case: run A saw no change, run B rated it 4 -> 2 with a flag.
+    r = rule(_v(specificity=3, original_specificity=3),
+             _v(specificity=2, original_specificity=4, vagueness_flags=["vaguer term"]),
+             judge="t", model=None)
+    assert r.valid and not r.vague and not r.vague_caught
 
 
 def test_ruling_sharp_lie():

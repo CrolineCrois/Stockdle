@@ -86,6 +86,7 @@ REASON_TEXT = {
     "implausible": "Nobody would believe that{detail}.",
     "ungrammatical": "That doesn't read as a real headline — check the grammar.",
     "pedantic": "Too pedantic — that barely changes what the headline says.",
+    "vague": "Too vague — it swaps something checkable for something fuzzy.",
 }
 
 
@@ -128,10 +129,23 @@ def rule(a: Verdict, b: Verdict, *, judge: str, model: str | None, added: str = 
     if mat < MIN_MATERIALITY:
         return invalid("pedantic", a if a.materiality <= b.materiality else b)
 
-    vague = bool(flags) or (orig - spec >= VAGUE_DROP)
-    return Ruling(valid=True, reason="", explanation=a.explanation, vague=vague,
-                  vague_caught=vague and spec <= VAGUE_CAUGHT_AT,
-                  sharp=not vague and spec == orig and spec >= SHARP_AT, **base)
+    # Vague = a vagueness flag, or specificity dropping by >= 2 against the SAME
+    # run's rating of the original. Like grammar, a split vote is borderline:
+    # it only counts as vague if BOTH runs say so.
+    def vague_in(v: Verdict) -> bool:
+        return bool(v.vagueness_flags) or (v.original_specificity - v.specificity >= VAGUE_DROP)
+
+    vague = vague_in(a) and vague_in(b)
+    vague_caught = vague and a.specificity <= VAGUE_CAUGHT_AT and b.specificity <= VAGUE_CAUGHT_AT
+    if vague:
+        note = (a if a.vagueness_flags else b).explanation
+        explanation = f"{reason_line('vague')} Judge’s note: {note}"
+    else:
+        explanation = a.explanation
+    sharp = (not vague and all(v.specificity == v.original_specificity for v in (a, b))
+             and spec >= SHARP_AT)
+    return Ruling(valid=True, reason="", explanation=explanation, vague=vague,
+                  vague_caught=vague_caught, sharp=sharp, **base)
 
 
 class JudgeUnavailable(RuntimeError):

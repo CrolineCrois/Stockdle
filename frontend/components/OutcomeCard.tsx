@@ -138,7 +138,9 @@ export default function OutcomeCard({
             <p className="mt-1 text-chalk-dim">
               {result.outcome === 'timeout' && !result.verdict.explanation
                 ? 'Never got to check it.'
-                : 'Not checked: the judge ruled it isn’t a usable lie.'}
+                : (result.verdict as { vague_caught?: boolean }).vague_caught
+                  ? 'Not checked: too vague to count as a lie.'
+                  : 'Not checked: the judge ruled it isn’t a usable lie.'}
             </p>
           )}
           {result.suspicion !== null && (
