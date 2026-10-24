@@ -118,3 +118,17 @@ def test_ruling_sharp_lie():
     assert r.sharp and "Sharp lie ×1.5" in r.tags()
     assert not rule(_v(specificity=3, original_specificity=3), _v(specificity=3, original_specificity=3),
                     judge="t", model=None).sharp
+
+
+def test_split_grammar_vote_passes_but_both_flagging_fails():
+    from judge.base import rule
+    assert rule(_v(), _v(is_grammatical=False), judge="t", model=None).valid
+    r = rule(_v(is_grammatical=False), _v(is_grammatical=False), judge="t", model=None)
+    assert not r.valid and r.reason == "ungrammatical" and r.explanation.startswith("Not grammatical:")
+
+
+def test_disagreement_quotes_the_run_that_said_not_false():
+    from judge.base import rule
+    r = rule(_v(explanation="it is false"), _v(is_false=False, explanation="it is still true"),
+             judge="t", model=None)
+    assert r.reason == "disagree" and r.explanation.endswith("it is still true")

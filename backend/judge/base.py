@@ -80,8 +80,23 @@ class Ruling:
                 "vague_caught": self.vague_caught, "sharp": self.sharp, "tags": self.tags()}
 
 
+REASON_TEXT = {
+    "disagree": "The two judges disagreed about whether this is false",
+    "not_false": "Not a lie",
+    "implausible": "Nobody would believe that",
+    "ungrammatical": "Not grammatical",
+    "pedantic": "Too pedantic",
+}
+
+
 def rule(a: Verdict, b: Verdict, *, judge: str, model: str | None) -> Ruling:
-    """Combine two runs. Conservative throughout: the stricter reading wins."""
+    """Combine two runs.
+
+    Whether the edit is FALSE must be agreed by both runs (the spec's rule). For
+    plausibility and grammar a split vote is borderline, so the edit only fails
+    if BOTH runs flag it. Materiality and specificity take the stricter reading.
+    The explanation shown is from the run whose concern decided the outcome.
+    """
     runs = [{**a.model_dump(), "phrasing": "a"}, {**b.model_dump(), "phrasing": "b"}]
     for r in runs:
         r.update(judge=judge, model=model)
@@ -90,23 +105,25 @@ def rule(a: Verdict, b: Verdict, *, judge: str, model: str | None) -> Ruling:
     orig = max(a.original_specificity, b.original_specificity)
     flags = sorted(set(a.vagueness_flags) | set(b.vagueness_flags))
     base = dict(runs=runs, materiality=mat, specificity=spec, original_specificity=orig,
-                vagueness_flags=flags, edit_type=a.edit_type, explanation=a.explanation)
+                vagueness_flags=flags, edit_type=a.edit_type)
+
+    def invalid(reason: str, by: Verdict) -> Ruling:
+        return Ruling(valid=False, reason=reason,
+                      explanation=f"{REASON_TEXT[reason]}: {by.explanation}", **base)
 
     if a.is_false != b.is_false:
-        return Ruling(valid=False, reason="disagree",
-                      **{**base, "explanation": "The two judges disagreed about whether "
-                                                "this is false, so it doesn't count."})
+        return invalid("disagree", a if not a.is_false else b)
     if not a.is_false:
-        return Ruling(valid=False, reason="not_false", **base)
-    if not (a.is_plausible and b.is_plausible):
-        return Ruling(valid=False, reason="implausible", **base)
-    if not (a.is_grammatical and b.is_grammatical):
-        return Ruling(valid=False, reason="ungrammatical", **base)
+        return invalid("not_false", a)
+    if not (a.is_plausible or b.is_plausible):
+        return invalid("implausible", a)
+    if not (a.is_grammatical or b.is_grammatical):
+        return invalid("ungrammatical", a)
     if mat < MIN_MATERIALITY:
-        return Ruling(valid=False, reason="pedantic", **base)
+        return invalid("pedantic", a if a.materiality <= b.materiality else b)
 
     vague = bool(flags) or (orig - spec >= VAGUE_DROP)
-    return Ruling(valid=True, reason="", vague=vague,
+    return Ruling(valid=True, reason="", explanation=a.explanation, vague=vague,
                   vague_caught=vague and spec <= VAGUE_CAUGHT_AT,
                   sharp=not vague and spec == orig and spec >= SHARP_AT, **base)
 
