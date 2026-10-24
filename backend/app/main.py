@@ -230,7 +230,7 @@ def submit(round_id: str, body: SubmitIn, db: Session = Depends(get_session)) ->
     player = _player(db, body.player_id)
     rnd, run, _ = _round(db, round_id, player)
     res = _game_errors(lambda: game.submit(
-        db, player=player, rnd=rnd, edited=body.edited,
+        db, player=player, rnd=rnd, edited=body.edited, auto=body.auto,
         trace=[t.model_dump() for t in body.trace], time_to_submit_ms=body.time_to_submit_ms))
     db.commit()
     return _result_out(db, res, run)

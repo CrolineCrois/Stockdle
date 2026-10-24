@@ -50,6 +50,7 @@ export default function HeadlineEditor({
         rows={2}
         maxLength={300}
         spellCheck={false}
+        enterKeyHint="send"
         autoCapitalize="off"
         autoCorrect="off"
         onChange={(e) => onChange(e.target.value.replace(/\n/g, ' '))}

@@ -362,3 +362,45 @@ def test_review_flow_and_judge_precision(client):
     bad = client.post(f"/api/admin/review/{item['id']}", headers=hdr,
                       json={"decision": "maybe", "reviewer": "alice"})
     assert bad.status_code == 422
+
+
+def _expire(rid):
+    with SessionLocal() as db:
+        rnd = db.get(Round, rid)
+        rnd.started_at -= timedelta(seconds=rnd.timer_start_s)    # clock exactly at zero
+        db.commit()
+
+
+def test_auto_submit_judges_a_legal_edit_at_zero(client):
+    pid, state = new_run(client, "AutoLegal")
+    rid = state["round"]["id"]
+    _expire(rid)
+    body = client.post(f"/api/round/{rid}/submit", json={
+        "player_id": pid, "edited": lie(headline_of(state)), "auto": True}).json()
+    assert body["outcome"] in {"snuck", "caught", "timeout"}
+    assert body["tags"][0] == "Time's up — auto-submitted" and body["round_over"]
+    with SessionLocal() as db:
+        assert db.query(Attempt).filter(Attempt.round_id == rid).one().timed_out
+
+
+def test_auto_submit_with_no_legal_edit_is_times_up(client):
+    pid, state = new_run(client, "AutoNothing")
+    rid = state["round"]["id"]
+    _expire(rid)
+    body = client.post(f"/api/round/{rid}/submit", json={
+        "player_id": pid, "edited": headline_of(state), "auto": True}).json()
+    assert body["outcome"] == "timeout" and body["state"]["run"]["lives"] == 2
+
+
+def test_auto_submitted_non_lie_ends_the_round(client):
+    pid, state = new_run(client, "AutoInvalid")
+    rid, words = state["round"]["id"], headline_of(state).split()
+    fillers = {"to", "in", "of", "the", "a", "for", "on"}
+    i = next((k for k, w in enumerate(words) if w.lower() in fillers), None)
+    if i is None:
+        pytest.skip("headline has no function word to swap")
+    words[i] = "the" if words[i].lower() != "the" else "a"
+    _expire(rid)
+    body = client.post(f"/api/round/{rid}/submit", json={
+        "player_id": pid, "edited": " ".join(words), "auto": True}).json()
+    assert body["outcome"] == "timeout" and body["round_over"]

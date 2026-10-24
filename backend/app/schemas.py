@@ -38,6 +38,8 @@ class TracePoint(BaseModel):
 class SubmitIn(EditIn):
     trace: list[TracePoint] = Field(default_factory=list, max_length=600)
     time_to_submit_ms: int = Field(default=0, ge=0, le=600_000)
+    # Sent by the client when the clock hits zero with an edit in the box.
+    auto: bool = False
 
 
 class TimeoutIn(PlayerRef):

@@ -54,6 +54,9 @@ covered yet. Every log row records the mode.
 
 Three lives, a 20-second clock (shorter as your streak grows; paused while the judge
 and verifier work), bounties (3×, +5 s), and "zero-day exploit" novelty bonuses.
+**Enter submits.** If the clock runs out, whatever is in the box is **auto-submitted**
+and judged as usual, provided it's a legal edit (1–3 word changes); an illegal edit,
+or an auto-submitted one the judge rules not a lie, is **time's up** (counts as caught).
 
 ### Scoring
 

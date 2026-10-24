@@ -3,7 +3,9 @@
 /**
  * One run: headlines until the lives run out.
  *
- *   editing  -> type; the meter updates 300ms after you stop; the clock runs
+ *   editing  -> type; the meter updates 300ms after you stop; the clock runs.
+ *               Enter submits. At zero, a legal edit (1-3 word changes) is
+ *               auto-submitted and judged as usual; anything else is time's up.
  *   judging  -> submitted; the clock is paused while the judge decides
  *   editing  -> (judge said "not a lie" and tries remain) the clock resumes
  *   result   -> snuck / caught / time's up / out of tries
@@ -146,11 +148,18 @@ export default function Play() {
   );
 
   const sendTimeout = useCallback(async () => {
-    if (!player || !round) return;
+    if (!player || !round || !rules) return;
     setPhase('judging');
+    const { changes } = wordDiff(round.headline.text, edited);
+    const legal = changes >= 1 && changes <= rules.max_words;
+    setNotice(legal ? "Time's up — submitting your edit…" : null);
     try {
       const ms = Math.round(performance.now() - roundShownRef.current);
-      handleResult(await api.timeout(round.id, player.player_id, edited, traceRef.current, ms));
+      handleResult(
+        legal
+          ? await api.submit(round.id, player.player_id, edited, traceRef.current, ms, true)
+          : await api.timeout(round.id, player.player_id, edited, traceRef.current, ms),
+      );
     } catch (e) {
       // The server thinks there is still time (clock drift): resync and carry on.
       if (e instanceof ApiError && e.status === 409) {
@@ -161,7 +170,7 @@ export default function Play() {
         setPhase('error');
       }
     }
-  }, [player, round, edited, handleResult]);
+  }, [player, round, rules, edited, handleResult]);
 
   useEffect(() => {
     if (phase !== 'editing') return;
@@ -258,11 +267,13 @@ export default function Play() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && phase === 'result') void next();
+      if (e.key !== 'Enter' || e.defaultPrevented) return;   // the editor handles its own Enter
+      if (phase === 'result') void next();
+      else if (phase === 'editing') void submit();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [phase, next]);
+  }, [phase, next, submit]);
 
   // --- render ----------------------------------------------------------------
   const run = game?.run;

@@ -202,12 +202,14 @@ export const api = {
   meter: (roundId: string, playerId: string, edited: string) =>
     post<MeterReading>(`/api/round/${roundId}/suspicion`, { player_id: playerId, edited }),
 
-  submit: (roundId: string, playerId: string, edited: string, trace: TracePoint[], ms: number) =>
+  /** ``auto``: the clock hit zero and the client is submitting what's in the box. */
+  submit: (roundId: string, playerId: string, edited: string, trace: TracePoint[], ms: number, auto = false) =>
     post<SubmitResult>(`/api/round/${roundId}/submit`, {
       player_id: playerId,
       edited,
       trace,
       time_to_submit_ms: ms,
+      auto,
     }),
 
   timeout: (roundId: string, playerId: string, edited: string, trace: TracePoint[], ms: number) =>

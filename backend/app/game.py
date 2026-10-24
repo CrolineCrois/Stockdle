@@ -20,7 +20,10 @@ One submission:
          SUPPORTED  -> snuck    full points, streak + 1   ("Misread evidence!")
          NOT ENOUGH -> partial  0.3x points, streak held (doesn't grow)
          REFUTED    -> caught   lose a life, streak resets
-    The clock running out first is a timeout, which counts as caught.
+    When the clock runs out, whatever is in the box is auto-submitted and judged
+    as usual -- if it's a legal edit (1-3 word changes). An illegal edit, or an
+    auto-submitted one the judge rules not a lie (no clock left to retry), is a
+    timeout, which counts as caught.
 
 The style model's suspicion is computed and logged for the live meter only;
 it never decides an outcome.
@@ -181,7 +184,7 @@ def _timeout(db: Session, run: Run, rnd: Round, player: Player, headline: Headli
 
 
 def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
-           time_to_submit_ms: int) -> Result:
+           time_to_submit_ms: int, auto: bool = False) -> Result:
     run = db.get(Run, rnd.run_id)
     if run.player_id != player.id:
         raise GameError("That round belongs to someone else.", 403)
@@ -194,6 +197,9 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
         return _timeout(db, run, rnd, player, headline, edited, trace, time_to_submit_ms)
 
     diff = word_diff(headline.text, edited)
+    if auto and not 1 <= diff.num_changes <= config.MAX_WORD_CHANGES:
+        # Out of time with nothing legal to submit.
+        return _timeout(db, run, rnd, player, headline, edited, trace, time_to_submit_ms)
     if diff.num_changes == 0:
         raise GameError("Change at least one word.")
     if diff.num_changes > config.MAX_WORD_CHANGES:
@@ -227,7 +233,18 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
     points: scoring.Points | None = None
     embedding, novelty_distance, is_novel = None, None, False
 
-    if not ruling.valid:
+    if auto:
+        tags.insert(0, "Time's up — auto-submitted")
+    if not ruling.valid and auto:
+        # Not a lie, and no clock left to try again: the round ends as a timeout.
+        outcome = "timeout"
+        run.lives -= 1
+        run.caught += 1
+        run.streak = 0
+        _end_round(db, run, rnd, "timeout")
+        round_over = True
+        events.append("times_up")
+    elif not ruling.valid:
         outcome = "invalid"
         round_over = rnd.attempts_used >= config.MAX_ATTEMPTS
         if round_over:
@@ -278,7 +295,7 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
     att = _log(db, rnd=rnd, run=run, player=player, headline=headline, edited=edited,
                diff=diff, susp=susp, trace=trace, verdict=verdict, outcome=outcome,
                points=points.total if points else 0, remaining=remaining,
-               time_to_submit_ms=time_to_submit_ms, timed_out=False,
+               time_to_submit_ms=time_to_submit_ms, timed_out=auto,
                verification=verification, tags=tags)
     att.novelty_distance, att.is_novel = novelty_distance, is_novel
     att.edit_embedding_json = json.dumps(embedding) if embedding else ""
