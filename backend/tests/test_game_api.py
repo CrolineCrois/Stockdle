@@ -277,3 +277,13 @@ def test_patch_day_ships_a_version_and_notifies_players(client):
 
 def test_admin_patch_day_needs_the_token(client):
     assert client.post("/api/admin/patch-day").status_code == 401
+
+
+def test_analytics_has_every_dashboard_section(client):
+    body = client.get("/api/analytics").json()
+    assert {"totals", "versions", "edit_types", "words_added", "timer", "mock_judged_attempts"} <= body.keys()
+    assert [b["bucket"] for b in body["timer"]] == ["0–25%", "25–50%", "50–75%", "75–100%"]
+    assert any(v["name"] == "stub" for v in body["versions"])
+    real = client.get("/api/analytics?judge=real").json()
+    assert real["totals"]["attempts"] <= body["totals"]["attempts"]
+    assert client.get("/api/analytics?judge=bogus").status_code == 422

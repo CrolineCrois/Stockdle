@@ -224,3 +224,44 @@ export const noticesApi = {
   list: (playerId: string) =>
     request<{ notices: PatchNotice[] }>(`/api/player/${encodeURIComponent(playerId)}/notices`),
 };
+
+export interface VersionRow {
+  name: string;
+  kind: string;
+  note: string;
+  n_train: number;
+  is_current: boolean;
+  created_at: string;
+  n_human: number;
+  n_machine: number;
+  n_true: number;
+  human_catch: number | null;
+  machine_catch: number | null;
+  false_alarm: number | null;
+  error?: string;
+}
+
+export interface Analytics {
+  judge_filter: 'all' | 'real';
+  mock_judged_attempts: number;
+  totals: {
+    rounds_played: number;
+    attempts: number;
+    exploits: number;
+    patched: number;
+    zero_days: number;
+    players: number;
+    current_detector: string;
+  };
+  versions: VersionRow[];
+  edit_types: { edit_type: string; count: number }[];
+  words_added: { word: string; count: number }[];
+  words_removed: { word: string; count: number }[];
+  timer: { bucket: string; n: number; success_rate: number | null; avg_suspicion: number | null }[];
+  outcomes: Record<string, number>;
+  threshold: number;
+}
+
+export const analyticsApi = {
+  get: (judge: 'all' | 'real') => request<Analytics>(`/api/analytics?judge=${judge}`),
+};

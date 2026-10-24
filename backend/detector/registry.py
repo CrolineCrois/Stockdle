@@ -49,6 +49,12 @@ def load(name: str) -> Detector:
         return _cache[name]
 
 
+def evict(name: str) -> None:
+    """Drop a loaded version from memory (DistilBERT weights are ~250MB each)."""
+    with _lock:
+        _cache.pop(name, None)
+
+
 def current_name() -> str:
     global _current, _checked_at
     if _current is None or time.monotonic() - _checked_at > RECHECK_S:

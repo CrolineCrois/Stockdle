@@ -90,7 +90,7 @@ def run(*, include_mock: bool = False, dry_run: bool = False, epochs: int = 4,
         labels = [1] * len(train)
         pairs += [(h.text, h.snippet) for _, h in train]
         labels += [0] * len(train)
-        from .train_v0 import load_split, synthetic_examples
+        from .splits import load_split, synthetic_examples
         test_ids = load_split(heads)
         syn_pairs, syn_labels = synthetic_examples(
             db, [h for h in heads if h.id not in test_ids])

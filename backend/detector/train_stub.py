@@ -26,6 +26,7 @@ from ingest.perturb import entity_pool, make_fakes
 from . import registry
 from .baseline import BaselineDetector
 from .bounties import refresh as refresh_bounties
+from .splits import load_split
 
 NAME = "stub"
 
@@ -55,10 +56,12 @@ def main() -> None:
     if len(heads) < 20:
         raise SystemExit("need at least 20 headlines; run `python -m ingest.seed` first")
 
-    rng.shuffle(heads)
-    cut = int(len(heads) * 0.8)
-    tr_pairs, tr_labels = build_examples(heads[:cut], rng)
-    te_pairs, te_labels = build_examples(heads[cut:], rng)
+    # The shared split: the stub never trains on the headlines every version is tested on.
+    test_ids = load_split(heads)
+    train_h = [h for h in heads if h.id not in test_ids]
+    test_h = [h for h in heads if h.id in test_ids]
+    tr_pairs, tr_labels = build_examples(train_h, rng)
+    te_pairs, te_labels = build_examples(test_h, rng)
 
     held_out = BaselineDetector.train(NAME, tr_pairs, tr_labels)
     probs = held_out.predict(te_pairs)
@@ -69,9 +72,7 @@ def main() -> None:
         "train_data": "seed headlines + rule-made fakes",
     }
 
-    # Ship a model trained on everything; the metrics above stay honest.
-    all_pairs, all_labels = tr_pairs + te_pairs, tr_labels + te_labels
-    final = BaselineDetector.train(NAME, all_pairs, all_labels)
+    final, all_labels = held_out, tr_labels
     path = final.save(config.DETECTOR_DIR / NAME)
 
     with SessionLocal() as db:

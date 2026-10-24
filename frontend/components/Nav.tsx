@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const LINKS = [
   { href: '/', label: 'Play' },
   { href: '/board', label: 'Board' },
+  { href: '/lab', label: 'Lab' },
 ];
 
 export default function Nav({ right }: { right?: React.ReactNode }) {

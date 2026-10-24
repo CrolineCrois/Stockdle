@@ -12,6 +12,7 @@
     GET  /api/player/{id}/notices       "your exploit was patched"
     GET  /api/detector/versions         every detector version and its metrics
     POST /api/admin/patch-day           run a patch day (x-admin-token)
+    GET  /api/analytics                 everything on the /lab dashboard
     GET  /api/health                    status, current detector, judge in use
 """
 
@@ -32,7 +33,7 @@ from sqlalchemy.orm import Session
 from detector import registry
 from judge import get_judge
 
-from . import config, game
+from . import analytics, config, game
 from .db import get_session, init_db
 from .diffing import word_diff
 from .models import Attempt, Headline, Player, Round, Run, utcnow
@@ -311,3 +312,11 @@ def trigger_patch_day(include_mock: bool = False,
 @app.get("/api/admin/patch-day")
 def patch_day_status() -> dict:
     return _patch_status
+
+
+@app.get("/api/analytics")
+def get_analytics(judge: str = "all", db: Session = Depends(get_session)) -> dict:
+    """Everything on /lab. ``judge=real`` drops mock-judged attempts."""
+    if judge not in ("all", "real"):
+        raise HTTPException(422, "judge must be 'all' or 'real'")
+    return analytics.build(db, judge)
