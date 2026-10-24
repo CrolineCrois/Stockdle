@@ -63,15 +63,19 @@ def retrieve(claim: str, k: int = 3, exclude_headline_id: int | None = None) -> 
     _index.ensure()
     if _index.bm25 is None:
         return []
-    scores = _index.bm25.get_scores(tokens(claim))
+    query = tokens(claim)
+    scores = _index.bm25.get_scores(query)
     ranked = sorted(range(len(scores)), key=lambda i: -scores[i])
+    wanted = set(query)
     hits: list[Hit] = []
     for i in ranked:
         pid, hid, text = _index.rows[i]
         if exclude_headline_id is not None and hid == exclude_headline_id:
             continue
-        if scores[i] <= 0:
-            break
+        # Require real word overlap rather than a positive score: on a small
+        # corpus BM25's IDF goes negative for common terms and would hide matches.
+        if not wanted & set(tokens(text)):
+            continue
         hits.append(Hit(pid, hid, text, round(float(scores[i]), 3)))
         if len(hits) >= k:
             break
