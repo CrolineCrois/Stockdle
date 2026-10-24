@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -181,3 +181,39 @@ class SyntheticFake(Base):
     generator: Mapped[str] = mapped_column(String(10))           # "claude" | "rules"
     model: Mapped[str] = mapped_column(String(40), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Passage(Base):
+    """A chunk of evidence for the verifier: a headline's RSS snippet (idx 0)
+    or a few sentences of its article body (idx 1..n).
+
+    Article text is stored for research use only. Players see at most the
+    few passages the verifier used, as short excerpts with the source link.
+    """
+
+    __tablename__ = "passages"
+    __table_args__ = (UniqueConstraint("headline_id", "idx", name="uq_passage_headline_idx"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    headline_id: Mapped[int] = mapped_column(ForeignKey("headlines.id"), index=True)
+    idx: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(10))          # "snippet" | "body"
+    text: Mapped[str] = mapped_column(Text)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class VerifierVersion(Base):
+    """One evidence-verifier version. ``path`` is a local directory, or a hub id
+    for v0 (the off-the-shelf model, no fine-tuning)."""
+
+    __tablename__ = "verifier_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(30), unique=True)  # v0, v1-human, v1-synthetic...
+    path: Mapped[str] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    train_data: Mapped[str] = mapped_column(String(40), default="none")   # none|human|synthetic|combined
+    n_train: Mapped[int] = mapped_column(Integer, default=0)
+    metrics_json: Mapped[str] = mapped_column(Text, default="{}")
+    note: Mapped[str] = mapped_column(String(300), default="")

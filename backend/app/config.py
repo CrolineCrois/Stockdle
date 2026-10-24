@@ -95,3 +95,10 @@ DETECTOR_MAX_LEN = _env("SIP_DETECTOR_MAX_LEN", 160)
 OPENAI_JUDGE_MODEL = _env("SIP_OPENAI_JUDGE_MODEL", "gpt-4.1-mini")
 OPENAI_FAKES_MODEL = _env("SIP_OPENAI_FAKES_MODEL", "gpt-4.1")
 FAKES_PROVIDER = _env("SIP_FAKES_PROVIDER", "auto")   # auto | claude | openai | rules
+
+# --- evidence verifier (decides rounds; see verifier/) -----------------------
+VERIFIER_BASE_MODEL = _env("SIP_VERIFIER_BASE", "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli")
+VERIFIER_TOP_K = _env("SIP_VERIFIER_TOP_K", 3)
+# A passage refutes / supports the claim when its probability clears this.
+VERIFIER_DECIDE_AT = _env("SIP_VERIFIER_DECIDE_AT", 0.5)
+VERIFIER_MAX_LEN = _env("SIP_VERIFIER_MAX_LEN", 256)
