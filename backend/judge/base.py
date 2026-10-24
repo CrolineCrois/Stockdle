@@ -92,7 +92,13 @@ REASON_TEXT = {
 
 def reason_line(reason: str, added: str = "") -> str:
     """The game's own one-line reason, so it can never contradict the ruling."""
-    detail = f" — “{added}” doesn't make sense here" if added and reason == "implausible" else ""
+    # Name the word only when there is a single change; with several, the
+    # combined words mislead (e.g. a harmless "highlights -> highlight" next to
+    # the nonsense), so say "that wording" and let the judge's note point.
+    detail = ""
+    if reason == "implausible":
+        detail = (f" — “{added}” doesn't make sense here" if added and "\n" not in added
+                  else " — that wording doesn't make sense here")
     return REASON_TEXT[reason].format(detail=detail)
 
 
@@ -169,5 +175,6 @@ def judge_twice(judge: Judge, original: str, snippet: str, edited: str) -> Rulin
         fb = pool.submit(judge.judge, original, snippet, edited, "b")
         a, b = fa.result(), fb.result()
     from app.diffing import word_diff
-    added = " ".join(c.after for c in word_diff(original, edited).changes if c.after)
+    # One change: its words. Several: newline-joined, which reason_line treats as "several".
+    added = "\n".join(c.after for c in word_diff(original, edited).changes if c.after)
     return rule(a, b, judge=judge.name, model=getattr(judge, "model", None), added=added)

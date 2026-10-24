@@ -152,3 +152,11 @@ def test_reason_line_names_the_nonsense_word():
     r = rule(_v(is_plausible=False), _v(is_plausible=False), judge="t", model=None, added="condor")
     assert r.explanation.startswith("Nobody would believe that — “condor” doesn't make sense here.")
     assert "Judge’s note:" in r.explanation
+
+
+
+def test_reason_line_does_not_name_words_when_several_changed():
+    from judge.base import reason_line
+    assert reason_line("implausible", "highlight\ngrower's") == \
+        "Nobody would believe that — that wording doesn't make sense here."
+    assert "“condor”" in reason_line("implausible", "condor")
