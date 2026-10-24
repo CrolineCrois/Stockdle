@@ -1,272 +1,268 @@
-# TAPE: Draw It
+# Sneak It Past
 
-**Draw the future. Beat the AI. Teach it something.**
+**Edit a true headline into a lie the AI can't catch. Every trick that works trains it.**
 
-A chart appears with its last stretch cut off. You get ten seconds to draw what
-happened next. Then the truth traces in over your line, two ghost lines fade up
-— what the crowd drew, and what the AI predicted — and you find out whether you
-beat either of them. Your drawing then becomes part of what the AI learns from.
+You get a real headline from today's news and a snippet of the article behind it.
+Change up to three words to make it false. A live **suspicion meter** shows what
+our misinformation detector thinks as you type. Submit, and a judge model checks
+that you really did make it false. Keep suspicion under 50% and you **sneak it
+past**; go over and you're **caught**. Three lives, a clock, streaks, bounties.
 
-Three kinds of round, all from real-world series:
-
-| Round | What you are predicting | Your clue |
-|---|---|---|
-| **Grid demand** | The next 50 hours of electricity load for a US balancing authority | Region and the temperature forecast |
-| **Mystery stock** | The next 50 bars after a real headline dropped | The headline. Ticker and date stay hidden until the reveal |
-| **Search trends** | The next 26 weeks of Google search interest | The search term |
+Every trick that gets through is adversarial training data. On **patch days** the
+detector retrains on them, so the game gets harder and the detector gets better
+at exactly the lies people find.
 
 ---
 
 ## Quick start
 
 ```bash
-npm run setup     # venv, dependencies, seed data, rounds, trained model
-npm run dev       # API on :8000, web app on :3000
+npm run setup       # venv, deps, seed headlines, stub detector, frontend packages
+npm run dev         # API on :8000, web app on :3000
 ```
 
-Then open **http://localhost:3000**.
+Open **http://localhost:3000**. That's a complete, playable game with **no API key
+and no GPU**: the stub detector and a rule-based mock judge stand in.
 
-`make setup` / `make dev` work too, if you have make; they just call the npm
-scripts, which handle the Windows/POSIX virtualenv path difference.
-
-Everything runs with **no API keys and no network**. The repo ships
-`data/seed/`, a bundled fallback for every source, so a cold clone is playable.
-
-For a demo that already looks alive — populated leaderboard, crowd ghost lines,
-a real AI version history on the dashboard:
+For the real thing:
 
 ```bash
-npm run seed-demo    # ~40 simulated players, ~600 drawings, ~24 AI versions
+cp .env.example .env              # then put your ANTHROPIC_API_KEY in it
+npm run setup:ml                  # torch + transformers (~1 GB), training fakes, DistilBERT v0
+npm run scrape                    # fresh headlines from the RSS feeds
 ```
 
-### Requirements
+With a key, the judge is Claude Sonnet 5.5 and v0's training fakes are written by
+Claude Opus 5.5. Without one, v0 trains on rule-made fakes and the version note
+says so — re-run `npm run fakes && npm run train-v0` once you have a key.
 
-Node 18+ and Python 3.11+ (developed on 3.13). Nothing else.
+**Requirements:** Node 18+, Python 3.11–3.13 (setup picks one automatically;
+3.14 is too new for some pinned wheels). Apple-silicon or CUDA GPUs speed up
+training but aren't needed: v0 trains in about a minute on a laptop.
 
----
+**API cost:** the API is pay-as-you-go, separate from any Claude.ai plan. A judge
+call is ~1–2¢, so ~1,000 submissions is $10–20; generating v0's fakes is a few
+dollars. Hackathons often hand out credits.
 
-## What the commands do
+### Commands
 
 | Command | What it does |
 |---|---|
-| `npm run setup` | Creates `backend/.venv`, installs, generates seed data, builds rounds, trains the model, installs frontend packages |
-| `npm run dev` | Runs the FastAPI backend and the Next.js app together |
-| `npm run pipeline` | Rebuilds rounds, trying the **live** sources first |
-| `npm run pipeline:offline` | Rebuilds rounds from cache/seed only, no network |
-| `npm run train` | Refits the base forecasters and prints held-out error per round type |
-| `npm run plot` | Renders `data/rounds/round_preview.png` to eyeball the rounds |
-| `npm run seed-demo` | Adds the simulated demo cohort |
-| `npm run reset-demo` | Wipes all play data, then re-seeds it |
-| `npm test` | Backend test suite (63 tests) |
+| `npm run setup` | Core setup: venv, requirements, seed headlines, stub detector, frontend |
+| `npm run setup:ml` | ML stack, training fakes, DistilBERT v0 |
+| `npm run dev` | API + web app |
+| `npm run scrape` | Pull fresh headlines from the configured RSS feeds |
+| `npm run fakes` | Make training fakes (Claude with a key, rules without) |
+| `npm run train-v0` | Train detector v0 |
+| `npm run patch-day` | Retrain on human exploits → next version (`-- --dry-run` to only evaluate) |
+| `npm run bounties` | Re-flag bounty headlines against the live detector |
+| `npm test` | Backend tests (36) |
+
+**On stage:** `POST /api/admin/patch-day` with header `x-admin-token` (default
+`sneak-demo`, set `SIP_ADMIN_TOKEN`) runs a patch day in the background; the
+running server switches to the new version within 5 seconds, no restart.
 
 ---
 
-## Data sources
+## How a round works
 
-Every scraper follows the same ladder: **try live → cache to `data/raw/` → fall
-back to `data/seed/`**. A source being down, rate-limited or keyless never
-breaks the game; it just means those rounds come from the seed archive, and the
-UI marks them with a `seed data` chip.
-
-| Source | Live via | Key | Notes |
-|---|---|---|---|
-| Electricity demand | [EIA Open Data v2](https://www.eia.gov/opendata/) (EIA-930 hourly demand) | `EIA_API_KEY` (free) | ERCOT, PJM, CAISO |
-| Temperature | [Open-Meteo archive](https://open-meteo.com/) | none | Hourly, joined to the demand series |
-| Stock prices + headlines | `yfinance` | none | 5-minute bars; each headline aligned to the bar at its publish time |
-| Search interest | `pytrends` | none | Weekly, 5 years, **one term per request** (see below) |
-
-Two things worth knowing if you re-run the pipeline:
-
-- **Google Trends normalises within a request.** Asking for three terms at once
-  scales them all against whichever is biggest, which flattened low-volume terms
-  like "tax extension" to a dead 0–1 line. Terms are fetched one at a time so
-  each is scaled to its own peak.
-- **Live Trends only serves 5 years at weekly resolution.** That is why trends
-  rounds use a different window (60 weeks visible → 26 weeks hidden, resampled
-  onto the canvas' 75/50 points) while hourly and minute sources use 75 → 50
-  directly. A 125-week window fits into 260 weeks barely twice, leaving nothing
-  to train on.
-
-All source timestamps are stored in UTC, but everything a player reads is on
-the local clock: grid rounds use the balancing authority's time zone (ERCOT
-Central, PJM Eastern, CAISO Pacific) and stock rounds use Eastern market time.
-Each round carries an `x_axis` block (tick labels, night bands for grid rounds,
-the time at the cut) so the canvas can label the time axis — demand depends
-heavily on time of day, and a minute index alone is hard to reason about.
-
-Round counts adapt to whatever the sources served: the builder measures how many
-non-overlapping windows each source can supply and allocates a ~200-round
-catalogue against a target mix, so a thin source shrinks its own slice rather
-than the whole game.
-
----
-
-## How the AI learns
-
-The naming here is deliberate — "the AI" is a forecasting model, and players
-improve it through a crowd-blend layer. Three separable pieces:
-
-**1. Base forecaster** (`backend/model/`) — one multi-output Ridge regression per
-round type, mapping 30 anchored lags + 9 shape statistics + type-specific context
-(temperature and hour/day for grid; headline sentiment for stocks; week and month
-harmonics for trends) to the 50 hidden points. It is fit on *historical windows*
-and never sees a game round: the builder asserts at build time that no training
-window shares a single source index with any playable round.
-
-Held-out error on the 179 game rounds it has never seen (offline build),
-against a persistence baseline (a flat line):
-
-| Round type | Model RMSE | Persistence | Skill |
-|---|---|---|---|
-| Grid demand | 0.099 | 0.316 | **+69%** |
-| Stock headline | 0.174 | 0.307 | **+43%** |
-| Search trends | 0.147 | 0.301 | **+51%** |
-
-**2. Crowd forecast** — a running pointwise mean of every drawing submitted on a
-round. A round needs 3 drawings before its crowd line is used at all.
-
-**3. Blend** — `prediction = w × model + (1 − w) × crowd`, with `w` fit per round
-type by grid search over [0, 1] against real outcomes. **This is the part human
-play actually moves.** Every 25 drawings (configurable) a FastAPI background task
-re-fits the weights, re-fits the base model if the pipeline produced new data,
-and writes an `ai_versions` row with model-only, crowd-only and blend error on a
-held-out split of rounds. The client picks that up and toasts
-*"⚡ TAPE AI v7 deployed — learned from 25 new drawings."*
-
-The weights it learns are themselves the interesting result. From the demo
-cohort: `electricity w=0.90` (people cannot read load curves — trust the model),
-`stock w=0.45` and `trends w=0.60` (the crowd earns a real share). And the blend
-beats both of its inputs, which is the dashboard's headline chart.
+1. **Read.** A real headline (BBC, NPR, The Guardian, Al Jazeera, PBS — configurable)
+   and its article snippet. ~15% are **bounties**: headlines the detector already
+   suspects, so hiding a lie in them is hard. Bounties pay 3× and get +5 s.
+2. **Edit.** Up to three word changes, counted by a word-level diff (substitutions,
+   insertions, deletions; case and punctuation don't count). The meter calls the
+   detector 300 ms after you stop typing.
+3. **Submit.** The clock pauses while the judge rules, so API latency never costs
+   you time. The detector's score is recomputed server-side; the client's meter is
+   never trusted.
+4. **Outcome.**
+   - Judge says it isn't false, isn't plausible or isn't grammatical → *not a lie*.
+     No life lost, but that try is used (3 per headline; a third ends the round and
+     your streak).
+   - False and suspicion < 50% → **SNUCK PAST**. Suspicion 40–50% is a near miss:
+     "so close!".
+   - False and suspicion ≥ 50% → **CAUGHT**, −1 life.
+   - Clock runs out → **TIME'S UP**, counts as caught.
 
 ### Scoring
 
 ```
-sigma = std(diff(truth))                       # the round's own volatility
-err   = RMSE(you, truth) / max(sigma × 9, 0.09)
-base  = round(100 × exp(−1.2 × err))           # clamped 0–100
-total = (base + bonuses) × streak multiplier
+points = round(1000 × (1 − suspicion))
+       × words     1 word = 3×, 2 = 2×, 3 = 1×
+       × streak    1 + 0.1 × streak, max 2×
+       × time      1 + 0.5 × (seconds left / starting seconds)   → up to 1.5×
+       × novelty   1.5× for a zero-day exploit
+       × bounty    3× on bounty headlines
 ```
 
-Dividing by the round's volatility is what makes a score mean the same thing on
-a jagged load curve and a quiet stock tape. Constants are tuned so a decent
-drawing lands 70–75 and a great one 90+ (`python -m scoring --calibrate` prints
-the table). Bonuses: turning point +25 (your extremum within 3 steps of the
-truth's, when the truth has a clear one), direction +10, beat the AI +20, beat
-the crowd +20. Base ≥ 95 is a bullseye; base ≥ 75 extends a streak, worth
-+0.1× per round up to 2×.
+**Timer:** 20 s, −1 s per streak level (minimum 10 s), +5 s on bounties. The server
+owns the clock; a submit up to 1.5 s late still counts (network slack).
 
----
-
-## Responsible design
-
-- **Simulated demo players are labelled `sim`** on the leaderboard. Seeded play
-  should not be mistaken for a real crowd.
-- **Share strings carry scores only** — no headline, ticker or round id — so a
-  result can be posted without spoiling or quoting anything.
-
-Identity is a display name in `localStorage` plus a row in `players`. No email,
-no password, no tracking.
+**Novelty ("zero-day exploit"):** each edit is embedded with `all-MiniLM-L6-v2` as
+(the shift in meaning from original to edited headline) ⊕ (the word move itself,
+e.g. "rises → falls"). If its cosine distance to every earlier exploit is ≥ 0.35
+(`SIP_NOVELTY_THRESHOLD`), it's a new trick: +50% and a place on the Exploit Board.
+Calibration: the same trick on a different headline scores ~0.12; different
+kinds of trick score ~0.9.
 
 ---
 
 ## Architecture
 
+```mermaid
+flowchart LR
+  RSS[RSS feeds] -->|scrape_rss| H[(headlines)]
+  H --> G[game.py<br/>runs · rounds · clock]
+  P[Player: Next.js] -->|keystrokes, debounced| M[/suspicion/]
+  M --> D[Detector<br/>DistilBERT vN<br/>headline + snippet]
+  P -->|submit| G
+  G --> D
+  G --> J[Judge<br/>Claude Sonnet 5.5<br/>or mock]
+  G --> N[novelty.py<br/>MiniLM embeddings]
+  G --> A[(attempts<br/>every submission)]
+  A -->|judge-verified exploits| PD[patch_day.py]
+  F[(synthetic_fakes)] --> V0[train_v0.py]
+  V0 --> DV[(detector_versions)]
+  PD --> DV
+  DV --> D
+  A --> L[/lab analytics/]
+  DV --> L
+```
+
 ```
 backend/
-  pipeline/        one module per source + the round builder
-    seed_gen.py      bundled fallback data for every source
-    electricity.py   EIA v2 + Open-Meteo
-    stocks.py        yfinance prices and headlines
-    trends.py        pytrends search interest
-    build_rounds.py  cuts series into rounds + disjoint training windows
-    plot_rounds.py   PNG sanity check
-  model/
-    features.py      round -> feature vector (anchored, level-invariant)
-    forecaster.py    per-type multi-output Ridge, alpha by grid search
-    blend.py         fits w for model/crowd blending
-    text.py          headline features (VADER + lexicon; MiniLM if enabled)
-    train.py         fits everything, reports held-out error
   app/
-    main.py          FastAPI routes
-    ai.py            forecaster + crowd + blend + versioning
-    daily.py         deterministic Daily 5 and the share string
-    schemas.py       request/response models and `public_round`
-    models.py        players, rounds, drawings, ai_versions
-  scoring.py         scoring, bonuses, streaks
-  scripts/seed_demo.py  the simulated demo cohort
+    main.py         FastAPI routes
+    game.py         runs, rounds, the server-side clock, outcomes, logging
+    scoring.py      points and timer rules (pure functions)
+    diffing.py      word-level diff, the 3-word rule
+    novelty.py      zero-day detection
+    analytics.py    everything on /lab
+    models.py       SQLite schema (below); db.py adds missing columns on startup
+  judge/            claude_judge.py (structured JSON, refusal fallback), mock_judge.py
+  detector/
+    baseline.py     phase-1 stub: logistic regression on headline-vs-snippet features
+    distil.py       DistilBERT sentence-pair classifier + shared fine-tuning loop
+    train_stub.py   train_v0.py   patch_day.py
+    splits.py       the one train/test split by headline every version shares
+    evaluate.py     catch rate, false-alarm rate, AUC — same for every version
+    registry.py     loads versions, tracks which is live, rechecks every 5 s
+    bounties.py
+  ingest/           scrape_rss.py, seed.py, make_fakes.py (LLM fakes), perturb.py (rule fakes)
+  tests/            36 tests, throwaway DB + mock judge, no model download
 frontend/
-  app/             landing, /play, /leaderboard, /dashboard
-  components/      DrawCanvas, ContextCard, ScorePanel, charts, Confetti, Toast
-  lib/             api client, validated chart palette, Web Audio kit
+  app/              / (start + research notice), /play, /board, /lab
+  components/       HeadlineEditor, SuspicionMeter, TimerBar, OutcomeCard, ShareCard, …
+  lib/              API client, word diff, sound kit, chart tokens
 data/
-  seed/            committed fallback data
-  raw/             scraper cache (gitignored)
-  rounds/          built rounds + training windows (gitignored)
+  seed/headlines.json   committed sample of real headlines (offline play)
+  detectors/            trained versions (gitignored; v0 is ~250 MB)
+  sneak.db              the database (gitignored)
 ```
 
-### API
+### Why the detector reads the snippet
 
-| Endpoint | Purpose |
-|---|---|
-| `POST /api/player` | Create or rename a player |
-| `GET /api/round/next?mode=daily\|endless&player_id=` | Next round, **without** `hidden` |
-| `GET /api/daily` | Today's five round ids |
-| `POST /api/round/{id}/submit` | Score a drawing; returns truth, AI, crowd, breakdown |
-| `GET /api/player/{id}/daily` | Daily 5 result and share string |
-| `GET /api/leaderboard?period=today\|all` | Standings |
-| `GET /api/ai/version` | Current AI version, for the toast |
-| `GET /api/dashboard` | Everything on `/dashboard` |
-| `POST /api/admin/retrain` | Force a retrain (needs `x-admin-token`) |
+The detector takes **(headline, article snippet)** as a sentence pair, not the
+headline alone. A headline-only model can't know that "rates rise 0.25%" is true
+and "rates rise 0.5%" is false — it can only learn the *style* of fakes, so patch
+days would teach it surface patterns rather than anything that generalises. Reading
+the source makes it a claim-verification model: *is this headline supported by its
+article?* Still small and fast: ~20 ms per call on a laptop CPU.
 
-`public_round()` in `app/schemas.py` is the single choke point for serialising a
-round, and strips `hidden`, `feat` and `span`. A test walks every pre-submit
-payload recursively looking for the truth curve.
+### Detector versions
 
-Input validation: curves must be exactly 50 finite numbers (values are clamped
-to 0–1 rather than rejected), one scored drawing per player per round enforced by
-a unique constraint, and a sliding-window rate limit per player.
+| Version | What it is | How it's measured |
+|---|---|---|
+| `stub` | Logistic regression on consistency features (unsupported numbers, names, negations) | Held-out AUC 0.67 on the shared test split |
+| `v0` | DistilBERT on true headlines vs machine-made fakes | Held-out AUC 0.82, catches 76% of fakes, flags 22% of true headlines *(rule-made fakes; re-run with a key for LLM fakes)* |
+| `v1, v2, …` | v(n-1) fine-tuned on judge-verified human exploits + their original headlines + v0's data | Scored on held-out human exploits, true headlines and synthetic fakes |
+
+**Honest evaluation.** Every exploit fooled whichever version was live when it was
+made, so scoring that version on its own exploits is meaningless. Instead, a stable
+~20% of exploits (chosen by a hash of the attempt id) is **never trained on by any
+version**, and every version is scored on that set. Next to it: the false-alarm rate
+on held-out true headlines (a detector that flags everything would catch every
+exploit) and the catch rate on held-out machine-made fakes (did patching make it
+forget?). That is the `/lab` headline chart.
 
 ---
 
-## Demo notes
+## Data schema
 
-- **Shift+R** on `/play` forces an AI retrain live (guarded by
-  `TAPE_ADMIN_TOKEN`). Good for showing the version toast on stage.
-- `/dashboard` polls every 12 seconds, so it updates while people play.
-- `npm run reset-demo` puts the demo back to a known state between runs.
-- The dark, high-contrast palette is built for a projector. Chart colours were
-  validated for colour-vision deficiency against the app's own surface; the four
-  canvas lines also differ in stroke style and carry a legend, so identity is
-  never on hue alone.
+| Table | One row per | Key fields |
+|---|---|---|
+| `headlines` | real headline | `text`, `snippet`, `source`, `url`, `published_at`, `is_bounty`, `detector_p`, `active` |
+| `players` | display name | `name`, `runs`, `best_score`, `is_bot` |
+| `runs` | game (3 lives) | `lives`, `streak`, `best_streak`, `score`, `snuck`, `caught`, `detector_version` |
+| `rounds` | headline in a run | `timer_start_s`, `paused_s` (judge time refunded), `attempts_used`, `status` |
+| `attempts` | **every submission** | see below |
+| `synthetic_fakes` | machine-made fake | `headline_id`, `text`, `edit_type`, `generator` (claude/rules), `model` |
+| `detector_versions` | trained detector | `name`, `kind`, `path`, `is_current`, `n_train`, `metrics_json`, `note` |
+
+`attempts` — the research log. Every submission is logged, valid or not:
+
+| Field | |
+|---|---|
+| `round_id`, `run_id`, `player_id` (anonymous), `created_at`, `attempt_no` | identity and time |
+| `headline_id`, `original_headline`, `edited_headline` | the edit |
+| `changed_words_json`, `num_words_changed` | the word-level diff |
+| `suspicion_score_final`, `suspicion_trace_json` | final score and every meter reading while typing, with ms timestamps and the text at that moment |
+| `judge_output_json`, `edit_type` | the judge's full verdict, incl. which judge (`claude` / `mock`) and model |
+| `outcome` | `snuck` / `caught` / `invalid` / `timeout` |
+| `points`, `streak`, `lives_left` | game state after this attempt |
+| `detector_version`, `is_bounty` | what it was played against |
+| `novelty_distance`, `is_novel`, `edit_embedding_json` | zero-day detection |
+| `time_to_submit_ms`, `timer_start_seconds`, `time_remaining_at_submit`, `timed_out` | the clock |
+| `patched_in`, `patch_notified` | which later version caught it, and whether the player has been told |
+
+---
+
+## Ethics and handling
+
+This game asks people to write misinformation, so the handling is part of the design:
+
+- **Everything players write is synthetic misinformation, and stays in our
+  database.** It is stored labelled with how it was made, and there is no public
+  feed, export endpoint or API that returns it outside the game.
+- **Player-made fakes are only ever displayed with a "FAKE — made in Sneak It
+  Past" label**, and only as the struck-through original plus the changed words
+  (Exploit Board, analytics) — never as a clean, quotable headline.
+- **Share cards carry scores only.** No headline text, original or edited, ever
+  goes into a share string.
+- **Players are told up front** (before their first run) that their edits are logged
+  for research and model training, are synthetic misinformation, and shouldn't be
+  copied elsewhere.
+- **The machine-made fakes used to train v0** are stored the same way: labelled
+  with their generator, never shown to players.
+- **Mock-judged data is kept apart.** Without an API key a rule-based mock judges
+  submissions; every such verdict is tagged, patch days ignore it by default, and
+  `/lab` can filter it out. It is development data, not research data.
+- **Anonymous by default.** A display name in `localStorage` and a row in
+  `players`; no email, no account, no tracking.
+- **Source material** is real headlines and short RSS snippets, kept with their
+  source URL and date, used for research. We assume reputable outlets' headlines are
+  true as published; a headline later corrected should be deactivated
+  (`headlines.active = 0`).
 
 ---
 
 ## Known limitations
 
-- **Seed data is synthetic.** It is shaped to match each source (diurnal load
-  curves with a temperature-driven evening peak, jump-diffusion prices,
-  wrapped-Gaussian search seasons) but it is not history. Rounds built from it
-  are chipped `seed data`. Run `npm run pipeline` with a network and an
-  `EIA_API_KEY` for the real thing. In particular, **seed headlines are
-  invented templates attached to real tickers** — "Microsoft announces $10B
-  buyback expansion" over a synthetic price path did not happen. Live stock
-  rounds use real yfinance headlines.
-- **yfinance is frequently rate-limited** by Yahoo. When it is, stock rounds come
-  from the seed archive. There is no fix for this on our side beyond the cache.
-- **Live Trends gives 14 rounds, not 50.** Five years of weekly data per term
-  only supports one playable window each once a training region is reserved. The
-  builder redistributes the shortfall to the other round types.
-- **The crowd layer needs people.** With fewer than 3 drawings on a round the AI
-  is model-only and the "beat the crowd" bonus is unavailable. `seed-demo` exists
-  precisely because a cold demo has no crowd.
-- **The demo cohort is simulated,** including a deliberately modelled shared
-  misread (players over-extrapolate the recent slope). Its dashboard numbers
-  describe simulated behaviour, not measured human behaviour, until real people
-  play.
-- **Blend weights are global per round type,** not per round or per player. A
-  per-round weight would be better but needs far more drawings per round.
-- **The base model is linear.** Ridge on lag features is a strong, fast baseline
-  and it is honest about what it is, but it cannot represent regime changes;
-  gradient boosting per output would likely help on the stock rounds.
-- **Single-process SQLite.** Fine for a demo and a room full of phones; it is not
-  a production write path.
+- **No API key yet → mock judge and rule-made fakes.** The game, logging, patch
+  days and dashboard all work, but the judge's verdicts and v0's training data are
+  stand-ins until a key is set. The judge integration hasn't been exercised against
+  the live API yet.
+- **Small data.** ~115 seed headlines; v0 trains on ~250 pairs. Scrape regularly
+  before an event. A patch day needs ≥ 5 judge-verified exploits, and the headline
+  chart needs held-out exploits (≈ 1 in 5) before it shows anything.
+- **Selection effects.** Exploits are, by construction, the edits the live detector
+  missed. The held-out set measures generalisation fairly, but it is drawn from what
+  players happened to try, not a random sample of all possible lies.
+- **Truth is relative to the snippet.** The judge rules on whether an edit is false
+  *relative to the original headline and its snippet*, not against the world.
+- **The clock runs on the server; the bar is a client animation.** A backgrounded
+  tab may show a stale bar; the server's verdict is what counts.
+- **SQLite** is fine for a room full of phones, not for production scale. `SIP_DB_URL`
+  accepts any SQLAlchemy URL (e.g. Postgres) — untested beyond SQLite.
+- **DistilBERT versions are ~250 MB each** on disk; `/lab` loads each one briefly to
+  score it, then frees it.
