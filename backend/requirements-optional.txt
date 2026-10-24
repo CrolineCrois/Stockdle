@@ -1,0 +1,10 @@
+# Optional extras. Everything degrades gracefully if these are absent.
+#   yfinance   -> live intraday stock prices + headlines  (fallback: data/seed)
+#   pytrends   -> live Google Trends interest-over-time    (fallback: data/seed)
+#   anthropic  -> LLM-generated fake headlines             (fallback: template list)
+#   sentence-transformers -> headline embeddings           (fallback: VADER + keywords)
+yfinance==0.2.52
+pytrends==4.9.2
+anthropic==0.42.0
+# sentence-transformers pulls in torch (~2GB); only install if you want embeddings.
+# sentence-transformers==3.3.1

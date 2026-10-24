@@ -1,0 +1,27 @@
+# Python
+backend/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Node
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts
+
+# Local config
+.env
+.env.local
+
+# Generated data. `data/seed/` IS committed — it is the offline fallback.
+data/raw/
+data/rounds/
+data/models/
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# OS
+.DS_Store
+Thumbs.db
