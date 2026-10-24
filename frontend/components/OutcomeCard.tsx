@@ -150,9 +150,7 @@ export default function OutcomeCard({
         <div className="rounded-xl bg-ink-950/60 p-3 text-sm">
           <p className="label">Judge{result.verdict.judge === 'mock' ? ' (mock)' : ''}</p>
           <p className="mt-1 text-chalk-dim">
-            {result.verdict.explanation
-              ? `${result.outcome === 'timeout' ? 'Not a usable lie: ' : ''}${result.verdict.explanation}`
-              : 'Ran out of time before submitting.'}
+            {result.verdict.explanation ?? 'Ran out of time before submitting.'}
           </p>
           {result.verdict.edit_type && <span className="chip mt-2">{result.verdict.edit_type}</span>}
         </div>

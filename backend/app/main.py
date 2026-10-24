@@ -14,6 +14,7 @@
     POST /api/admin/patch-day           run a patch day (x-admin-token)
     GET  /api/analytics                 everything on the /lab dashboard
     GET  /api/verifier/versions         evidence-verifier versions and which is live
+    GET  /api/learning                  per-version benchmark + live catch rates (How it learns)
     GET  /api/admin/review              exploit review queue + counters (x-admin-token)
     POST /api/admin/review/{id}         approve / reject an exploit (x-admin-token)
     GET  /api/health                    status, current detector, judge in use
@@ -393,3 +394,10 @@ def verifier_versions() -> dict:
         "n_train": v.n_train, "note": v.note, "is_current": v.name == current,
         "metrics": json.loads(v.metrics_json or "{}"),
     } for v in verifiers.versions()]}
+
+
+@app.get("/api/learning")
+def learning_summary() -> dict:
+    """The How-it-learns scorecard: benchmark per version, plus live catch rates."""
+    from . import learning
+    return learning.summary()

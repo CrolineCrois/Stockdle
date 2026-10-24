@@ -95,6 +95,8 @@ def run(*, dry_run: bool = False, min_exploits: int = MIN_EXPLOITS, log=print) -
                 patched += 1
         db.commit()
     mark_patch_day(datetime.now(timezone.utc).replace(tzinfo=None))
+    from app.learning import benchmark_verifier
+    report["benchmark"] = benchmark_verifier(name)     # same fixed set as every other version
     from detector.bounties import refresh
     report["bounties"] = refresh()
     log(f"[patch] shipped {name}; {patched} exploits now patched")

@@ -79,6 +79,8 @@ def main() -> None:
         print(f"[v0] NOT made live: {why}. The previous detector stays current.")
     print(f"[v0] current detector: {registry.current_name()}")
     print(f"[v0] flagged {refresh_bounties()} bounty headlines")
+    from app.learning import benchmark_meter
+    print(f"[v0] benchmark: {benchmark_meter(NAME, force=True)}")
 
 
 if __name__ == "__main__":

@@ -390,3 +390,28 @@ export const versionsApi = {
   verifier: () => request<{ current: string; versions: ModelVersion[] }>('/api/verifier/versions'),
   meter: () => request<{ current: string; versions: ModelVersion[] }>('/api/detector/versions'),
 };
+
+export interface Benchmark {
+  lies_caught: CI;
+  true_flagged: CI;
+}
+
+export interface LearningVersion {
+  name: string;
+  n_train: number;
+  created_at: string;
+  is_current: boolean;
+  note: string;
+  train_data?: string;
+  benchmark: Benchmark | null;
+}
+
+export interface LearningSummary {
+  verifier: LearningVersion[];
+  meter: LearningVersion[];
+  live: { version: string; caught: CI }[];
+}
+
+export const learningApi = {
+  get: () => request<LearningSummary>('/api/learning'),
+};

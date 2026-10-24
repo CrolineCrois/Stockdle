@@ -11,7 +11,8 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import Nav from '@/components/Nav';
-import { analyticsApi, versionsApi, type Analytics, type ModelVersion } from '@/lib/api';
+import Scorecard from '@/components/Scorecard';
+import { analyticsApi, learningApi, versionsApi, type Analytics, type LearningSummary, type ModelVersion } from '@/lib/api';
 import { pct } from '@/lib/viz';
 
 function Step({
@@ -83,13 +84,15 @@ export default function Learn() {
   const [a, setA] = useState<Analytics | null>(null);
   const [verifiers, setVerifiers] = useState<ModelVersion[]>([]);
   const [meters, setMeters] = useState<ModelVersion[]>([]);
+  const [learning, setLearning] = useState<LearningSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = () =>
-      Promise.all([analyticsApi.get('real'), versionsApi.verifier(), versionsApi.meter()])
-        .then(([an, v, m]) => {
+      Promise.all([analyticsApi.get('real'), versionsApi.verifier(), versionsApi.meter(), learningApi.get()])
+        .then(([an, v, m, l]) => {
           setA(an);
+          setLearning(l);
           setVerifiers(v.versions);
           setMeters(m.versions.filter((x) => x.name === 'stub' || /^v\d+$/.test(x.name)));
         })
@@ -118,6 +121,8 @@ export default function Learn() {
           this game.
         </p>
         {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+
+        {learning && <Scorecard data={learning} />}
 
         <ol className="mt-8 space-y-3">
           <Step n={1} title="You write a lie" stat={a?.totals.attempts ?? '—'} statLabel="attempts logged">
