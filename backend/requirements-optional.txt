@@ -3,3 +3,4 @@
 torch>=2.5,<3
 transformers>=4.47,<5
 sentence-transformers>=3.3,<4
+datasets>=3,<5

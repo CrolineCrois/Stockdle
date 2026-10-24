@@ -312,19 +312,18 @@ _patch_status: dict = {"running": False, "last": None}
 
 
 @app.post("/api/admin/patch-day")
-def trigger_patch_day(include_mock: bool = False,
-                      x_admin_token: str | None = Header(default=None)) -> dict:
-    """Run a patch day in the background (for a live demo). Token-guarded."""
+def trigger_patch_day(x_admin_token: str | None = Header(default=None)) -> dict:
+    """Run a verifier patch day in the background (for a live demo). Token-guarded."""
     if x_admin_token != config.ADMIN_TOKEN:
         raise HTTPException(401, "bad admin token")
     if not _patch_lock.acquire(blocking=False):
         raise HTTPException(409, "a patch day is already running")
 
     def work():
-        from detector import patch_day
+        from verifier import patch_day
         _patch_status["running"] = True
         try:
-            _patch_status["last"] = patch_day.run(include_mock=include_mock)
+            _patch_status["last"] = patch_day.run()
         except Exception as exc:  # noqa: BLE001 - report it rather than kill the thread silently
             _patch_status["last"] = {"shipped": False, "reason": f"{type(exc).__name__}: {exc}"}
         finally:

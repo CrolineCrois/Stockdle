@@ -15,6 +15,9 @@
     "train-stub": "node scripts/tasks.mjs train-stub",
     "train-v0": "node scripts/tasks.mjs train-v0",
     "patch-day": "node scripts/tasks.mjs patch-day",
+    "patch-style": "node scripts/tasks.mjs patch-style",
+    "articles": "node scripts/tasks.mjs articles",
+    "evaluate": "node scripts/tasks.mjs evaluate",
     "bounties": "node scripts/tasks.mjs bounties",
     "test": "node scripts/tasks.mjs test",
     "build": "node scripts/tasks.mjs build"

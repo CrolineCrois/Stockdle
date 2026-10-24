@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from detector import registry
 from detector.evaluate import catch_rate, metrics
 
-from . import config
+from . import config, review
 from .diffing import norm
 from .models import Attempt, DetectorVersion, Headline, Player, Round
 
@@ -96,6 +96,52 @@ def _time_buckets(attempts: list[Attempt]) -> list[dict]:
     return rows
 
 
+def _verifier_failures(attempts: list[Attempt]) -> list[dict]:
+    """Of the judge-valid lies of each edit type, how many did the verifier miss?"""
+    lies = [a for a in attempts if a.outcome in ("snuck", "partial", "caught") and a.verifier_verdict]
+    out = []
+    for kind in sorted({a.edit_type or "other" for a in lies}):
+        group = [a for a in lies if (a.edit_type or "other") == kind]
+        missed = [float(a.outcome in ("snuck", "partial")) for a in group]
+        from evaluation.metrics import ci
+        out.append({"edit_type": kind, "n": len(group), "failure_rate": ci(missed),
+                    "supported": sum(a.verifier_verdict == "supported" for a in group),
+                    "nei": sum(a.verifier_verdict == "nei" for a in group)})
+    return sorted(out, key=lambda r: -(r["failure_rate"]["value"] or 0))
+
+
+def _mode_win_rates(attempts: list[Attempt]) -> list[dict]:
+    rows = []
+    for mode in ("evidence", "breaking"):
+        group = [a for a in attempts if a.mode == mode and a.outcome in ("snuck", "partial", "caught")
+                 and a.verifier_verdict]
+        rows.append({"mode": mode, "n": len(group),
+                     "snuck": sum(a.outcome == "snuck" for a in group),
+                     "partial": sum(a.outcome == "partial" for a in group),
+                     "win_rate": round(sum(a.outcome == "snuck" for a in group) / len(group), 4)
+                     if group else None})
+    return rows
+
+
+def _progress(attempts: list[Attempt]) -> list[dict]:
+    """Approved exploits per day, cumulative, by edit type."""
+    approved = sorted((a for a in attempts if a.review_status == "approved"),
+                      key=lambda a: a.reviewed_at or a.created_at)
+    running: Counter = Counter()
+    days: dict[str, dict] = {}
+    for a in approved:
+        running[a.edit_type or "other"] += 1
+        day = (a.reviewed_at or a.created_at).date().isoformat()
+        days[day] = {"day": day, "total": sum(running.values()), **dict(running)}
+    return list(days.values())
+
+
+def _evaluation() -> dict | None:
+    from evaluation.data import EVAL_DIR
+    path = EVAL_DIR / "latest.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
 def build(db: Session, judge: str = "all") -> dict:
     attempts = _attempts(db, judge)
     exploits = [a for a in attempts if a.outcome == "snuck"]
@@ -126,4 +172,9 @@ def build(db: Session, judge: str = "all") -> dict:
         "timer": _time_buckets(attempts),
         "outcomes": dict(Counter(a.outcome for a in attempts)),
         "threshold": config.SNEAK_THRESHOLD,
+        "verifier_failures": _verifier_failures(attempts),
+        "modes": _mode_win_rates(attempts),
+        "review": review.stats(db),
+        "progress": _progress(attempts),
+        "evaluation": _evaluation(),
     }

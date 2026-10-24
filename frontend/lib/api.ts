@@ -291,6 +291,34 @@ export interface Analytics {
   timer: { bucket: string; n: number; success_rate: number | null; avg_suspicion: number | null }[];
   outcomes: Record<string, number>;
   threshold: number;
+  verifier_failures: { edit_type: string; n: number; failure_rate: CI; supported: number; nei: number }[];
+  modes: { mode: string; n: number; snuck: number; partial: number; win_rate: number | null }[];
+  review: ReviewStats;
+  progress: ({ day: string; total: number } & Record<string, number | string>)[];
+  evaluation: EvalResults | null;
+}
+
+export interface CI {
+  value: number | null;
+  lo: number | null;
+  hi: number | null;
+  n: number;
+}
+
+export interface ModelScores {
+  held_out_exploits: { overall: CI; by_edit_type: Record<string, CI> };
+  fresh_exploits: { overall: CI; by_edit_type: Record<string, CI> };
+  true_headlines: { overall: CI };
+  vitaminc: { accuracy: CI; macro_f1: CI };
+}
+
+export interface EvalResults {
+  created_at: string;
+  dev_data: boolean;
+  base_model: string;
+  counts: Record<string, number>;
+  synthetic_provider: string | null;
+  models: Record<string, ModelScores>;
 }
 
 export const analyticsApi = {

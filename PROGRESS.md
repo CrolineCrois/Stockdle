@@ -58,6 +58,30 @@ exploits as patched and re-flags bounties. Dry-run verified on the live DB.
 (`#0b1020`), all-pairs pass. Every chart has a tooltip and a table view; legend
 text in ink, never series colour.
 
+## Prompt update: search-backed fact-checker (in progress → done below)
+
+| Step | Status |
+|---|---|
+| Evidence corpus: article bodies → passages, BM25 retrieval, evidence / breaking-news modes | ✅ |
+| Verifier v0 (DeBERTa-v3-base MNLI/FEVER/ANLI, off the shelf), SUPPORTED / REFUTED / NEI | ✅ |
+| Outcomes from the verifier: snuck / partial / caught; evidence shown on reveal | ✅ |
+| Judge v2: materiality, specificity, vagueness flags, 8 edit types, two runs must agree | ✅ |
+| Scoring: materiality, sharp lie, too vague, partial; tags | ✅ |
+| Human review: /admin queue, decisions log, counters, judge precision | ✅ |
+| Evaluation: by-headline split, v0 / v1-synthetic / v1-human / v1-combined, VitaminC, bootstrap CIs | ✅ (pipeline verified on stand-in data; needs approved exploits for real results) |
+| Patch day retrains the verifier (gated) | ✅ |
+| Dashboard: failures by edit type, modes, model comparison, false positives, VitaminC, judge accuracy, progress | ✅ |
+| README rewrite with project focus | ✅ |
+
+**Findings on the way.** Off the shelf, with article bodies as evidence, v0 supported
+35/40 true headlines (refuted none) and refuted 51/60 gpt-4.1 fakes — so wins in the
+game are genuinely hard. Before the redesign, the old headline+snippet detector
+couldn't learn LLM fakes at all (DistilBERT AUC ~0.55; it collapsed to "everything
+false" and went live — the ship gate exists because of that). RSS snippets alone are
+too thin: only 38% of LLM fakes even touch a word the snippet mentions, hence fetching
+article bodies. BM25 on a small corpus needed an IDF-weighted relevance bar, or
+generic shared words ("after", "death") pulled unrelated stories in as "evidence".
+
 ## After phase 6
 
 - **OpenAI as an alternative provider** for the judge and v0's fakes (the team has

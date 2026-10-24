@@ -14,7 +14,10 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ErrorBar,
   LabelList,
+  Line,
+  LineChart,
   Legend,
   ResponsiveContainer,
   Tooltip,
@@ -23,7 +26,7 @@ import {
 } from 'recharts';
 
 import Nav from '@/components/Nav';
-import { analyticsApi, exploitsApi, type Analytics, type ExploitRow } from '@/lib/api';
+import { analyticsApi, exploitsApi, type Analytics, type CI, type ExploitRow } from '@/lib/api';
 import { INK, SERIES, pct } from '@/lib/viz';
 
 const AXIS = { stroke: INK.axis, tick: { fill: INK.muted, fontSize: 12 }, tickLine: false } as const;
@@ -124,6 +127,33 @@ function Tile({ label, value, sub }: { label: string; value: string | number; su
 }
 
 const pctLabel = (v: number | null) => (v === null || v === undefined ? '' : pct(v));
+const MODEL_ORDER = ['v0', 'v1-synthetic', 'v1-human', 'v1-combined'];
+const ciText = (c?: CI) =>
+  !c || c.value === null ? '—' : `${pct(c.value)} [${pct(c.lo)}–${pct(c.hi)}] n=${c.n}`;
+/** Rows for a one-metric bar chart with 95% CI whiskers. */
+const ciRows = (items: [string, CI | undefined][]) =>
+  items
+    .filter(([, c]) => c && c.value !== null)
+    .map(([name, c]) => ({ name, value: c!.value, err: [c!.value! - c!.lo!, c!.hi! - c!.value!], n: c!.n }));
+
+function CIChart({ rows, height = 240, name }: { rows: ReturnType<typeof ciRows>; height?: number; name: string }) {
+  return (
+    <div style={{ height }}>
+      <ResponsiveContainer>
+        <BarChart data={rows} margin={{ top: 24, right: 8, left: -12, bottom: 0 }}>
+          <CartesianGrid {...GRID} />
+          <XAxis dataKey="name" {...AXIS} />
+          <YAxis {...AXIS} domain={[0, 1]} tickFormatter={(v: number) => pct(v)} />
+          <Tooltip content={<TipBox format={pct} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+          <Bar name={name} dataKey="value" fill={SERIES.human} radius={BAR_END}>
+            <ErrorBar dataKey="err" width={6} stroke={INK.secondary} strokeWidth={1.5} />
+            <LabelList dataKey="value" position="top" offset={14} formatter={pctLabel} fill={INK.secondary} fontSize={11} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 export default function Lab() {
   const [judge, setJudge] = useState<'all' | 'real'>('all');
@@ -142,19 +172,17 @@ export default function Lab() {
     return () => clearInterval(id);
   }, [load]);
 
-  const versions = data?.versions ?? [];
-  const anyHuman = versions.some((v) => v.human_catch !== null);
 
   return (
     <>
       <Nav />
       <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-8">
         <p className="label">The lab</p>
-        <h1 className="mt-1 text-4xl font-black tracking-tight">What human tricks taught the detector</h1>
+        <h1 className="mt-1 text-4xl font-black tracking-tight">Where the fact-checker fails — and what fixes it</h1>
         <p className="mt-2 max-w-3xl text-sm text-chalk-dim">
-          Every version is scored on the same held-out exploits — tricks no version trained on — and
-          the same held-out true headlines, so a better catch rate can’t come from memorising or from
-          flagging everything.
+          Every win in the game is a real failure of a search-backed fact-checker. Models are compared on
+          held-out exploits from headlines none of them trained on, held-out true headlines, and the
+          VitaminC benchmark, each with 95% bootstrap intervals. Small or negative results are shown as they are.
         </p>
 
         {/* Filters: one row, above the charts. */}
@@ -193,31 +221,114 @@ export default function Lab() {
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
               <Panel
                 wide
-                kicker="Headline result"
-                title="Does each patch day catch more human tricks?"
-                caption="Share of held-out human exploits each version catches, next to how often it wrongly flags a true headline. Up on blue without up on aqua is real progress."
+                kicker="Key finding"
+                title="Which kinds of lie does the fact-checker miss?"
+                caption="Of the judge-approved lies of each kind, the share the evidence verifier let through (SUPPORTED or not enough info) — even with the source article retrievable. Whiskers are 95% bootstrap intervals."
                 table={
                   <Table
-                    head={['Version', 'Human exploits caught', 'True headlines flagged', 'Held-out exploits', 'Trained on']}
-                    rows={versions.map((v) => [v.name, pct(v.human_catch), pct(v.false_alarm), v.n_human, v.n_train])}
+                    head={['Edit type', 'Missed', 'Supported', 'Not enough info', 'Lies']}
+                    rows={data.verifier_failures.map((r) => [r.edit_type, ciText(r.failure_rate), r.supported, r.nei, r.n])}
                   />
                 }
               >
-                {!anyHuman ? (
-                  <Empty what="No held-out human exploits yet — about 1 in 5 exploits is held out, so this fills in as people play." />
+                {data.verifier_failures.length === 0 ? (
+                  <Empty what="No judged lies yet." />
                 ) : (
-                  <div className="h-72">
+                  <CIChart name="Missed by the verifier" rows={ciRows(data.verifier_failures.map((r) => [r.edit_type, r.failure_rate]))} />
+                )}
+              </Panel>
+
+              <Panel
+                wide
+                kicker="Main result"
+                title="Does human-found data teach the verifier more than LLM-made data?"
+                caption={
+                  data.evaluation
+                    ? `Refute recall on held-out human exploits (headlines no model trained on). Same base model, settings and training-set size for every v1. ${data.evaluation.counts.train_exploits} training exploits, ${data.evaluation.counts.test_exploits} held out${data.evaluation.dev_data ? ' — DEV RUN with unreviewed data, not a result' : ''}.`
+                    : 'Run `npm run evaluate` once enough exploits are approved.'
+                }
+                table={
+                  data.evaluation ? (
+                    <Table
+                      head={['Model', 'Held-out exploits caught', 'Fresh exploits caught', 'True headlines refuted', 'VitaminC macro-F1']}
+                      rows={MODEL_ORDER.filter((m) => data.evaluation!.models[m]).map((m) => {
+                        const x = data.evaluation!.models[m];
+                        return [m, ciText(x.held_out_exploits.overall), ciText(x.fresh_exploits.overall),
+                                ciText(x.true_headlines.overall), ciText(x.vitaminc.macro_f1)];
+                      })}
+                    />
+                  ) : (
+                    <Empty what="No evaluation results yet." />
+                  )
+                }
+              >
+                {!data.evaluation ? (
+                  <Empty what="No evaluation results yet — approve exploits on /admin, then run npm run evaluate." />
+                ) : (
+                  <CIChart
+                    name="Held-out exploits caught"
+                    rows={ciRows(MODEL_ORDER.map((m) => [m, data.evaluation!.models[m]?.held_out_exploits.overall]))}
+                  />
+                )}
+              </Panel>
+
+              <Panel
+                kicker="Sanity check"
+                title="False positives by version"
+                caption="Share of held-out TRUE headlines each model wrongly refutes. Catching more lies only counts if this doesn't jump."
+                table={
+                  <Table
+                    head={['Model', 'True headlines refuted']}
+                    rows={MODEL_ORDER.filter((m) => data.evaluation?.models[m]).map((m) => [m, ciText(data.evaluation!.models[m].true_headlines.overall)])}
+                  />
+                }
+              >
+                {!data.evaluation ? (
+                  <Empty what="No evaluation results yet." />
+                ) : (
+                  <CIChart name="True headlines refuted" height={220}
+                    rows={ciRows(MODEL_ORDER.map((m) => [m, data.evaluation!.models[m]?.true_headlines.overall]))} />
+                )}
+              </Panel>
+
+              <Panel
+                kicker="Generalisation"
+                title="VitaminC macro-F1 by version"
+                caption="A public fact-verification benchmark of minimal contrastive edits. Fine-tuning on our data should not make this worse."
+                table={
+                  <Table
+                    head={['Model', 'Macro-F1', 'Accuracy']}
+                    rows={MODEL_ORDER.filter((m) => data.evaluation?.models[m]).map((m) => [m, ciText(data.evaluation!.models[m].vitaminc.macro_f1), ciText(data.evaluation!.models[m].vitaminc.accuracy)])}
+                  />
+                }
+              >
+                {!data.evaluation ? (
+                  <Empty what="No evaluation results yet." />
+                ) : (
+                  <CIChart name="VitaminC macro-F1" height={220}
+                    rows={ciRows(MODEL_ORDER.map((m) => [m, data.evaluation!.models[m]?.vitaminc.macro_f1]))} />
+                )}
+              </Panel>
+
+              <Panel
+                kicker="Two modes"
+                title="Evidence vs breaking-news win rates"
+                caption="Share of judge-approved lies that fully snuck past. In breaking-news mode the source article is hidden from the fact-checker."
+                table={<Table head={['Mode', 'Snuck', 'Partial', 'Lies', 'Win rate']} rows={data.modes.map((m) => [m.mode, m.snuck, m.partial, m.n, pct(m.win_rate)])} />}
+              >
+                {data.modes.every((m) => m.n === 0) ? (
+                  <Empty what="No judged lies yet." />
+                ) : (
+                  <div className="h-56">
                     <ResponsiveContainer>
-                      <BarChart data={versions} barGap={2} margin={{ top: 22, right: 8, left: -12, bottom: 0 }}>
+                      <BarChart data={data.modes} margin={{ top: 22, right: 8, left: -12, bottom: 0 }}>
                         <CartesianGrid {...GRID} />
-                        <XAxis dataKey="name" {...AXIS} />
+                        <XAxis dataKey="mode" {...AXIS} />
                         <YAxis {...AXIS} domain={[0, 1]} tickFormatter={(v: number) => pct(v)} />
                         <Tooltip content={<TipBox format={pct} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                        <Legend {...LEGEND} />
-                        <Bar name="Human exploits caught" dataKey="human_catch" fill={SERIES.human} radius={BAR_END}>
-                          <LabelList dataKey="human_catch" position="top" formatter={pctLabel} fill={INK.secondary} fontSize={11} />
+                        <Bar name="Win rate" dataKey="win_rate" fill={SERIES.human} radius={BAR_END}>
+                          <LabelList dataKey="win_rate" position="top" formatter={pctLabel} fill={INK.secondary} fontSize={11} />
                         </Bar>
-                        <Bar name="True headlines wrongly flagged" dataKey="false_alarm" fill={SERIES.truth} radius={BAR_END} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -225,34 +336,23 @@ export default function Lab() {
               </Panel>
 
               <Panel
-                kicker="Blind spots"
-                title="Machine-made fakes vs human tricks"
-                caption="v0 only ever saw lies written by a machine. The gap between the bars is what people find that generated training data misses."
-                table={
-                  <Table
-                    head={['Version', 'Machine fakes caught', 'Human exploits caught']}
-                    rows={versions.map((v) => [v.name, pct(v.machine_catch), pct(v.human_catch)])}
-                  />
-                }
+                kicker="Data progress"
+                title="Approved exploits over time"
+                caption={`Toward ${data.review.target_before_patch_day} before the first patch day. Judge precision against human review: ${data.review.judge_precision === null ? 'not yet measured' : pct(data.review.judge_precision)} (${data.review.decisions_logged} decisions).`}
+                table={<Table head={['Day', 'Approved (cumulative)']} rows={data.progress.map((d) => [d.day, d.total])} />}
               >
-                {versions.length === 0 ? (
-                  <Empty what="No detector versions yet." />
+                {data.progress.length === 0 ? (
+                  <Empty what="Nothing approved yet." />
                 ) : (
-                  <div className="h-64">
+                  <div className="h-56">
                     <ResponsiveContainer>
-                      <BarChart data={versions} barGap={2} margin={{ top: 22, right: 8, left: -12, bottom: 0 }}>
+                      <LineChart data={data.progress} margin={{ top: 12, right: 12, left: -12, bottom: 0 }}>
                         <CartesianGrid {...GRID} />
-                        <XAxis dataKey="name" {...AXIS} />
-                        <YAxis {...AXIS} domain={[0, 1]} tickFormatter={(v: number) => pct(v)} />
-                        <Tooltip content={<TipBox format={pct} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                        <Legend {...LEGEND} />
-                        <Bar name="Machine-made fakes caught" dataKey="machine_catch" fill={SERIES.machine} radius={BAR_END}>
-                          <LabelList dataKey="machine_catch" position="top" formatter={pctLabel} fill={INK.secondary} fontSize={11} />
-                        </Bar>
-                        <Bar name="Human exploits caught" dataKey="human_catch" fill={SERIES.human} radius={BAR_END}>
-                          <LabelList dataKey="human_catch" position="top" formatter={pctLabel} fill={INK.secondary} fontSize={11} />
-                        </Bar>
-                      </BarChart>
+                        <XAxis dataKey="day" {...AXIS} />
+                        <YAxis {...AXIS} allowDecimals={false} />
+                        <Tooltip content={<TipBox />} />
+                        <Line name="Approved exploits" dataKey="total" stroke={SERIES.human} strokeWidth={2} dot={{ r: 4 }} />
+                      </LineChart>
                     </ResponsiveContainer>
                   </div>
                 )}
