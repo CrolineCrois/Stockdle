@@ -1,22 +1,19 @@
 {
-  "name": "tape-draw-it",
-  "version": "1.0.0",
+  "name": "sneak-it-past",
+  "version": "0.1.0",
   "private": true,
-  "description": "Draw the future. Beat the AI. Teach it something.",
+  "description": "Edit a true headline into a lie the AI detector can't catch. Every trick that works trains it.",
   "scripts": {
-    "setup": "node scripts/tape.mjs setup",
-    "dev": "node scripts/tape.mjs dev",
-    "dev:api": "node scripts/tape.mjs api",
-    "dev:web": "node scripts/tape.mjs web",
-    "build": "node scripts/tape.mjs build",
-    "pipeline": "node scripts/tape.mjs pipeline",
-    "pipeline:offline": "node scripts/tape.mjs pipeline-offline",
-    "seed": "node scripts/tape.mjs seed",
-    "train": "node scripts/tape.mjs train",
-    "plot": "node scripts/tape.mjs plot",
-    "seed-demo": "node scripts/tape.mjs seed-demo",
-    "reset-demo": "node scripts/tape.mjs reset-demo",
-    "test": "node scripts/tape.mjs test"
+    "setup": "node scripts/tasks.mjs setup",
+    "dev": "node scripts/tasks.mjs dev",
+    "dev:api": "node scripts/tasks.mjs api",
+    "dev:web": "node scripts/tasks.mjs web",
+    "scrape": "node scripts/tasks.mjs scrape",
+    "seed": "node scripts/tasks.mjs seed",
+    "train-stub": "node scripts/tasks.mjs train-stub",
+    "bounties": "node scripts/tasks.mjs bounties",
+    "test": "node scripts/tasks.mjs test",
+    "build": "node scripts/tasks.mjs build"
   },
   "engines": { "node": ">=18" }
 }

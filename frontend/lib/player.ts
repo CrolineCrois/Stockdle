@@ -2,7 +2,7 @@
 
 import { api, type PlayerInfo } from './api';
 
-const KEY = 'tape.player';
+const KEY = 'sip.player';
 
 export interface StoredPlayer {
   player_id: string;

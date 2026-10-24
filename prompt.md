@@ -1,143 +1,108 @@
-I'm building a hackathon demo called **TAPE: Draw It**: an addictive web game where players predict the future of real-world charts by drawing a line, and their drawings help train an AI. Please build it end to end following this spec. Work in the phases below, run and verify each phase before moving on, and keep a short PROGRESS.md updated. Prioritize a working, polished demo over completeness: if something is hard (an API is down, a library breaks), use the fallback described and keep going.
+# Project: "Sneak It Past" — a hackathon game that trains a misinformation detector
 
----
+## Context
+We're building this for an AI hackathon (judged partly on disinformation work and on "most fun"). The project must collect real data, analyze it, and train a model. Please read this whole spec, then propose a plan and file structure before writing code. Build in the phases listed at the bottom so we always have a working demo.
 
-## 1. Game concept
+## The game in one sentence
+Players get a TRUE news headline and edit up to 3 words to make it FALSE while keeping it sneaky enough that our AI misinformation detector still thinks it's true. Every trick that fools the detector becomes adversarial training data, and the detector periodically retrains ("patch days") so it gets harder over time.
 
-Each round:
-1. A chart appears with the first ~60% of the line visible, plus a context card (e.g. a news headline, a temperature forecast, or a search term).
-2. The remaining area is blank. The player has 10 seconds to draw their prediction of how the line continues (mouse or touch).
-3. On submit, the real line animates in over the player's line (~1.2s), and the area between them is shaded.
-4. Then two "ghost" lines fade in: the crowd's average drawing for this round and the AI's prediction.
-5. Score pops up with bonuses, streak updates, and a "Next" button (Enter/Space also advances).
+## Core gameplay loop
+1. Player is shown a real, true headline (plus a short snippet of the source article for context).
+2. Player edits the headline in an inline editor. Max 3 word-level changes (substitutions, insertions, or deletions; compute with a word-level diff).
+3. A live "suspicion meter" shows the detector's probability that the edited headline is false, updating as they type (debounce ~300ms).
+4. Player hits Submit.
+5. A judge model checks whether the edit actually makes the headline false relative to the original article, and that it's grammatical and plausible-sounding.
+6. Outcome:
+   - Judge says it's not false / nonsense → "Still true!" or "Nobody would believe that," no points, player can try again (max 3 attempts per headline).
+   - Judge confirms false AND suspicion < 50% → SNUCK PAST. Award points, streak increases.
+   - Judge confirms false AND suspicion >= 50% → CAUGHT. Lose a life, streak resets.
+7. Run has 3 lives. Run ends when lives hit 0. Show a shareable result card.
 
-Modes:
-- **Daily 5:** the same 5 rounds for everyone today (deterministic by date). At the end, show a shareable emoji result like:
-  `TAPE #14 🎯 87 · 92 · 41 · 78 · 99 | beat AI 4/5`, with a copy-to-clipboard button.
-- **Endless:** random rounds and a streak counter until you choose to stop.
+## Scoring (make this feel juicy)
+- Base points = round(1000 × (1 − suspicion))
+- Word multiplier: 1 word changed = 3x, 2 words = 2x, 3 words = 1x
+- Streak multiplier: 1 + 0.1 × current streak, capped at 2x
+- Novelty bonus ("zero-day exploit"): embed the edit (original vs edited headline pair, and the changed words) with a sentence-transformer. If its minimum cosine distance to all previous successful exploits is above a threshold (make it configurable), award +50% and add the player's name to an "Exploit Board."
+- Bounty headlines: some headlines are flagged as bounties (ones where the current detector is most overconfident). They're worth 3x and show a bounty badge.
+- Animations: suspicion meter swings live, points count up, "SNUCK PAST" / "CAUGHT" stamps, near-miss message when suspicion lands between 40% and 50% ("so close!").
 
-Players enter a display name only (no auth), stored in localStorage plus a players table.
+## The detector (must be fast)
+- The live meter calls the detector on every debounced keystroke, so it must be a small fast model, NOT an LLM. Use a DistilBERT (or similar small) binary classifier that takes only the headline text and outputs P(false).
+- Detector v0 baseline: train on (a) scraped true headlines labeled true, and (b) automatically generated false versions labeled false, created by asking an LLM to make small factual edits to true headlines. This gives us a baseline trained on LLM-made fakes.
+- Patch days: a retraining script that takes all judge-verified successful player exploits (labeled false) plus a matched set of true headlines, and fine-tunes the next detector version (v1, v2, …). Keep every version so we can compare them.
+- Track the detector version in every logged round.
+- Players get a notification when one of their exploits gets "patched" (the new version catches it).
 
----
+## The judge
+- Uses the Anthropic API (model configurable via env var; default to a Claude Sonnet model). Called once per submission, not live.
+- Input: original headline, article snippet, edited headline.
+- Output strict JSON: { "is_false": bool, "is_plausible": bool, "is_grammatical": bool, "edit_type": string (e.g. "number change", "negation", "entity swap", "causal claim", "other"), "explanation": string }
+- Validate the JSON and handle failures gracefully.
+- Never put API keys in code; use environment variables and a .env.example.
 
-## 2. Tech stack and repo layout
+## Data collection
+- Scrape real true headlines plus short article snippets from news RSS feeds (make the feed list configurable). Store source URL and publish date. Deduplicate.
+- Precompute bounty flags by running the current detector on the headline pool.
+- Log EVERY attempt (not just successes) to the database:
+  round_id, player_id (anonymous), timestamp, headline_id, original_headline, edited_headline, changed_words, num_words_changed, suspicion_score_final, suspicion_trace (the sequence of meter values while typing, with timestamps), judge_output (full JSON), outcome (snuck / caught / invalid), points, streak, lives_left, detector_version, novelty_distance, is_bounty, time_to_submit.
+- The suspicion trace is important: it shows how players search for blind spots.
 
-- `backend/`: Python 3.11, FastAPI, SQLite (via SQLAlchemy or sqlite3), pandas, numpy, scikit-learn. Optional: sentence-transformers (`all-MiniLM-L6-v2`) for headline embeddings, with a fallback to VADER sentiment plus simple keyword features if it fails to install or load.
-- `frontend/`: Next.js (App Router, TypeScript), Tailwind, HTML canvas for drawing and charts (no heavy chart library needed; draw it ourselves so the animation is smooth). Framer Motion for UI animation is fine.
-- `data/`: `raw/` (cached scrape output), `seed/` (bundled fallback data checked into the repo), `rounds/` (processed rounds).
-- Root `README.md` with setup steps and a single `make dev` (or npm script) that starts both servers.
-- Config via `.env` (e.g. `EIA_API_KEY`, optional `ANTHROPIC_API_KEY`). Everything must still run with no keys, using the seed data.
+## Analytics dashboard (separate page for the demo)
+- Detector accuracy on human exploits, by version (v0 → v1 → v2…). This is the headline chart for judges.
+- v0 (trained on LLM-made fakes) vs later versions: show that human tricks find blind spots that LLM-generated training data misses.
+- Breakdown of successful exploits by edit_type.
+- Most common changed words in successful exploits.
+- Exploit Board (top novel tricks).
+- Totals: rounds played, exploits found, exploits patched.
 
----
+## Ethics / handling (include in the README)
+- All edited headlines are synthetic misinformation. Store them only in our database, clearly labeled synthetic. Never display player-made fakes outside the game without a "FAKE — made in Sneak It Past" label, and don't build any public feed of them.
+- Show players a short notice that their edits are logged for research and model training.
 
-## 3. Data pipeline (`backend/pipeline/`)
+## Tech stack (suggestions — push back if something simpler is better for a hackathon)
+- Frontend: React (Vite or Next.js) + Tailwind. Mobile-friendly; most people will play on phones.
+- Backend: Python FastAPI (serves the detector, calls the judge, handles scoring and logging).
+- Database: SQLite for local dev, easy swap to Postgres/Supabase for deployment.
+- ML: Hugging Face transformers for the detector, sentence-transformers for novelty embeddings.
+- Training scripts should run on a free Colab GPU or a laptop CPU for small runs.
 
-Write one scraper module per source. Each must: (a) try the live source, (b) cache results to `data/raw/`, (c) on any failure, fall back to `data/seed/`. Generate realistic seed data for every source now so the app always works offline. Use real-looking structure (e.g. daily load curves with temperature-driven peaks), clearly marked as seed.
+## Add: editing timer
 
-Sources:
-1. **Electricity demand:** hourly demand from the EIA Open Data API v2 (EIA-930 balancing authority data, e.g. ERCOT, PJM, CAISO) plus hourly temperature for a representative city per region from the Open-Meteo historical API (free, no key). Context card: "Region: ERCOT · Forecast high 104°F · Tuesday".
-2. **Stocks plus headlines:** intraday prices from `yfinance` and recent headlines via `yfinance` Ticker news (title plus publish time). Align each headline to the price series at its publish timestamp: the visible part ends at the headline time, the hidden part is what happened after. Context card: the headline plus the ticker hidden until reveal (show "Mystery stock" before, ticker and date after).
-3. **Google Trends:** weekly interest over time via `pytrends` for a curated list of fun, seasonal terms (e.g. "pumpkin spice", "flu symptoms", "sunscreen", "world cup", "tax extension"). pytrends is often rate-limited, so cache aggressively and rely on seed data if needed. Context card: the search term.
-4. **Fake-headline rounds (disinformation angle):** take real stock charts and pair them with a fabricated headline (e.g. fake CEO resignation, fake regulatory ban). Generate the fakes with the Anthropic API if `ANTHROPIC_API_KEY` is set, otherwise use a template list of ~20. The hidden part is the real price path, which did NOT react to the fake news. After the reveal, show a clear banner: "This headline was FAKE. Here's what really happened." Store `is_fake = true`. Fake headlines must never appear outside a round with that label, and the share text must never include headline text.
+Add a countdown timer to the editing phase of each headline to make rounds tense.
 
-**Round builder** (`build_rounds.py`): cut series into rounds with:
-- `id`, `type` (`electricity` | `stock` | `trends` | `fake_stock`), `visible` (array of y-values), `hidden` (array of exactly 50 y-values), `context` (JSON for the card), `reveal_info` (JSON shown after, e.g. ticker/date/region), `is_fake`.
-- Normalize y-values per round to a 0–1 range based on the full (visible+hidden) min/max with 10% padding, so drawings are on a common scale. Store the scale so axis labels show real units.
-- Build ~200 game rounds and a separate, larger set of historical training windows for the model (no overlap with game rounds).
+Rules:
+- Each headline starts with a 20-second timer (make it configurable).
+- The timer gets shorter as the player's streak grows: subtract 1 second per streak level, with a minimum of 10 seconds.
+- Bounty headlines get +5 seconds since they're harder.
+- All attempts on a headline (max 3) share the same clock. Pause the timer while the judge is evaluating a submission so API latency never costs the player time; resume it if the attempt was invalid.
+- If the timer hits 0 before a successful submission, it counts as CAUGHT: lose a life and reset the streak.
 
----
+Scoring:
+- Add a time bonus multiplier: 1 + 0.5 × (seconds remaining / starting seconds). Fast sneaks can earn up to 1.5x.
+- Apply it alongside the existing word, streak, novelty, and bounty multipliers.
 
-## 4. Scoring (`backend/scoring.py`)
+Feel:
+- Show the timer as a shrinking bar above the editor, not just a number.
+- Last 5 seconds: the bar turns red, pulses, and the suspicion meter shakes slightly. Add an optional ticking sound (with a mute toggle).
+- On a fast sneak (more than half the time left), show a "QUICK HANDS" bonus popup.
+- On timeout, show a "TIME'S UP" stamp before moving on.
 
-Inputs: player curve (50 points, normalized), true hidden curve (50 points), visible curve.
-- `sigma` = standard deviation of the true hidden curve's first differences, floored at a small epsilon, to normalize for volatility.
-- `err` = RMSE(player, truth) / max(sigma × 5, 0.05) (tune constants so a decent guess scores 60–85 and a great one 90+).
-- Base score = round(100 × exp(−1.2 × err)), clamped 0–100.
-- Bonuses:
-  - **Turning point (+25):** if the true curve's global max or min in the hidden region is a clear extremum, award the bonus when the player's corresponding extremum is within 3 x-steps.
-  - **Direction (+10):** sign of (end − start) matches the truth.
-  - **Beat the AI (+20)** and **beat the crowd (+20)**, based on raw RMSE comparisons (crowd only counts once the round has at least 3 prior drawings).
-- **Bullseye:** base score ≥ 95 triggers a special animation.
-- **Streak:** consecutive rounds with base ≥ 75 add a multiplier of 1 + 0.1 × streak (cap 2×).
-Write unit tests for scoring.
+Logging (add to every attempt row):
+- timer_start_seconds, time_remaining_at_submit, timed_out (bool).
+- Keep the existing suspicion_trace timestamps so we can analyze how players search under pressure.
 
----
+Analytics dashboard addition:
+- Chart: success rate and average suspicion score vs. time remaining. This shows whether rushed tricks are sloppier or whether players find blind spots by instinct.
 
-## 5. The AI (`backend/model/`)
+## Build phases (finish and test each before moving on)
+1. MVP: scrape headlines, a stub detector (any quick baseline), the editor with word-diff limit, judge integration, basic scoring, lives, logging. Playable end to end.
+2. Real detector v0: generate LLM-made fakes, train DistilBERT, wire up the live suspicion meter.
+3. Addictive layer: streak/word/novelty multipliers, bounties, animations, near-miss messages, share card.
+4. Patch days: retraining script, versioning, "your exploit was patched" notifications.
+5. Analytics dashboard.
+6. README with setup steps, architecture diagram, data schema, and the ethics section.
 
-Be honest in naming: the AI is a forecasting model, and players improve it through a crowd-blend layer.
-
-1. **Base forecaster (per round type):** multi-output Ridge regression (or a small GradientBoosting per output, if fast enough) mapping features to the 50 hidden points. Features: the last ~30 visible points (resampled), simple stats (slope, volatility, last value), plus type-specific context (temperature, hour/day for electricity; headline embedding or sentiment for stocks; month/seasonality for trends). Train on the historical windows, not the game rounds.
-2. **Crowd forecast:** per round, the pointwise mean of all player drawings (store a running mean).
-3. **Blend model:** prediction = w × model + (1 − w) × crowd, with w learned per round type by minimizing error over rounds where both exist (a simple grid search over w in [0, 1] is fine). Fall back to model only when a round has fewer than 3 drawings.
-4. **Retraining and versions:** every 25 new drawings (configurable), re-fit the blend weights, and re-fit the base model if new data is available. Each retrain creates an `ai_versions` row with a version number, timestamp, and error metrics (model-only, crowd-only, and blend RMSE on a held-out set of completed rounds). The frontend shows a toast: "⚡ TAPE AI v7 deployed — learned from 25 new drawings."
-5. Run retraining in a FastAPI background task so it never blocks gameplay.
-
----
-
-## 6. Backend API (FastAPI)
-
-- `GET /api/round/next?mode=daily|endless&player_id=` → round **without** the `hidden` field (never leak the answer before submit).
-- `GET /api/daily` → today's 5 round ids (deterministic seed from date).
-- `POST /api/round/{id}/submit` with `{player_id, curve: number[50], time_ms}` → validates the curve, stores the drawing, returns `{truth, ai_curve, crowd_curve, score_breakdown, reveal_info, is_fake, streak}`.
-- `GET /api/leaderboard?period=today|all`
-- `GET /api/dashboard` → stats for the dashboard page (below).
-- `GET /api/ai/version` → current version, for the toast.
-SQLite tables: `players`, `rounds`, `drawings`, `ai_versions`. Add simple input validation and rate limiting (e.g. max 1 submit per round per player).
-
----
-
-## 7. Frontend
-
-Pages:
-- `/`: landing with the game name, a one-line pitch ("Draw the future. Beat the AI. Teach it something."), name input, and buttons for Daily 5 and Endless.
-- `/play`: the main game.
-- `/leaderboard`
-- `/dashboard`: the "science" page for judges.
-
-**Drawing canvas (most important component):**
-- Chart on a canvas: visible line drawn solid, a vertical dashed "now" line at the cut point, blank prediction region to its right, light gridlines, and real-unit axis labels.
-- The player draws only in the prediction region. Map pointer x to one of 50 slots; keep **one y per x** (a new stroke overwrites earlier values in the slots it covers); linearly interpolate gaps; snap the start of the drawing to the last visible point visually.
-- Submit is enabled once ≥ 90% of the slots are covered. The 10-second timer auto-submits if coverage is enough; otherwise the round is skipped with score 0.
-- Works on touch (pointer events, `touch-action: none`), and is responsive on phone and laptop.
-- Reveal sequence: the truth line traces left-to-right (~1.2s), the gap between player and truth is shaded, then the crowd (dashed) and AI (dotted) ghost lines fade in with a legend, then the score counter animates up with bonus chips appearing one by one. Bullseye: screen shake plus confetti.
-- Fake rounds: after the reveal, show a prominent banner explaining that the headline was fake and what the stock really did.
-
-**Game feel:**
-- Snappy transitions, preloading the next round during the reveal.
-- A streak flame indicator; a score multiplier badge.
-- AI version toast when a new version deploys.
-- Simple sound effects (draw, reveal, bullseye) using small generated tones via the Web Audio API, with a mute toggle.
-- Dark, high-contrast visual style that looks good on a projector. Clean, modern, not generic.
-
-**Dashboard (`/dashboard`):**
-1. AI version history: line chart of model-only vs crowd-only vs blend error across versions (the headline graph: "humans + AI beat either alone").
-2. Player improvement: average score by round number (rounds 1–5, 6–10, …) across all players.
-3. Human bias findings: average signed error by round type (do players overreact or underreact?), and for stock rounds, the average predicted move for fake vs real headlines.
-4. Totals: drawings collected, players, current AI version.
-Use a lightweight chart library (Recharts is fine) for the dashboard only.
-
----
-
-## 8. Demo-readiness
-
-- A seed script that simulates ~40 players making ~600 drawings with realistic noise (some players good, some biased toward overreacting to headlines) and runs several retrains, so the dashboard and ghost lines look alive at demo time. Make it resettable (`make reset-demo`).
-- An admin keyboard shortcut or env flag to force a retrain live during the pitch.
-- README sections: setup, running, data sources, how the AI learns, responsible design (fake headlines are labeled, never exported as text, and exist to teach detection), and known limitations.
-
----
-
-## Phases (verify each before moving on)
-
-1. Repo scaffold, seed data for all sources, round builder → confirm rounds are generated and look sensible (write a quick script that plots a few to PNG).
-2. Scoring module with tests.
-3. Base forecaster and training script → report baseline error per round type.
-4. FastAPI backend with all endpoints → test with curl/pytest; confirm `hidden` never leaks.
-5. Frontend drawing canvas and the full round loop (draw → submit → reveal → score → next).
-6. Daily 5, Endless, streaks, share grid, leaderboard.
-7. Crowd forecast, blend model, retraining, versions, toast.
-8. Dashboard.
-9. Live scrapers (EIA, Open-Meteo, yfinance, pytrends, fake headlines) with fallbacks.
-10. Demo seed script, polish pass on animations and mobile, README.
-
-When you finish each phase, summarize what works and anything you had to change from this spec.
+## Please
+- Ask me any clarifying questions before starting.
+- Keep the code simple and well-commented; teammates will be reading it.
+- Write a seed script so the game works with a small sample of headlines even before scraping is set up.

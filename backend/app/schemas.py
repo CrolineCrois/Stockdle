@@ -1,28 +1,11 @@
-"""Request/response models, and the one function that keeps the answer secret."""
+"""Request bodies and the shapes the client reads."""
 
 from __future__ import annotations
 
-from typing import Any, Literal
-
 from pydantic import BaseModel, Field, field_validator
 
-from . import config
-
-# Fields of a round record that must never reach the client before submit.
-SECRET_FIELDS = ("hidden", "feat", "span")
-
-
-def public_round(payload: dict, *, round_id: str | None = None) -> dict:
-    """Strip the answer out of a round record.
-
-    This is the single choke point for round serialisation. ``hidden`` is the
-    truth, ``feat`` leaks the forecast high / headline age the truth depends on,
-    and ``span`` would let someone look the window up in the source file.
-    """
-    out = {k: v for k, v in payload.items() if k not in SECRET_FIELDS}
-    out["id"] = round_id or payload.get("id")
-    out.pop("reveal_info", None)       # that is the post-submit payload
-    return out
+from . import config, game
+from .models import Headline, Player, Round, Run
 
 
 class PlayerIn(BaseModel):
@@ -38,76 +21,58 @@ class PlayerIn(BaseModel):
         return v[:32]
 
 
-class PlayerOut(BaseModel):
-    player_id: str
-    name: str
-    rounds_played: int
-    total_score: int
-    streak: int
-    best_streak: int
-
-
-class SubmitIn(BaseModel):
+class PlayerRef(BaseModel):
     player_id: str = Field(min_length=1, max_length=40)
-    curve: list[float]
-    time_ms: int = Field(ge=0, le=600_000)
-    mode: Literal["daily", "endless"] = "endless"
-    skipped: bool = False
-
-    @field_validator("curve")
-    @classmethod
-    def check_curve(cls, v: list[float]) -> list[float]:
-        if len(v) != config.CURVE_LEN:
-            raise ValueError(f"curve must have exactly {config.CURVE_LEN} points")
-        out = []
-        for x in v:
-            if not isinstance(x, (int, float)) or x != x or x in (float("inf"), float("-inf")):
-                raise ValueError("curve must contain finite numbers")
-            out.append(min(1.0, max(0.0, float(x))))
-        return out
 
 
-class SubmitOut(BaseModel):
-    round_id: str
-    truth: list[float]
-    ai_curve: list[float]
-    crowd_curve: list[float] | None
-    crowd_n: int
-    score_breakdown: dict[str, Any]
-    reveal_info: dict[str, Any]
-    streak: int
-    ai_version: int
-    player_total: int
+class EditIn(PlayerRef):
+    edited: str = Field(min_length=1, max_length=300)
 
 
-class RoundOut(BaseModel):
-    round: dict[str, Any] | None
-    mode: str
-    index: int = 0
-    of: int = 0
-    done: bool = False
-    daily_number: int | None = None
+class TracePoint(BaseModel):
+    t_ms: int = Field(ge=0, le=600_000)       # ms since the round started
+    s: float = Field(ge=0.0, le=1.0)          # meter value shown
+    text: str | None = Field(default=None, max_length=300)
 
 
-class LeaderRow(BaseModel):
-    rank: int
-    name: str
-    player_id: str
-    score: int
-    rounds: int
-    best_streak: int
-    avg: float
-    is_bot: bool = False
+class SubmitIn(EditIn):
+    trace: list[TracePoint] = Field(default_factory=list, max_length=600)
+    time_to_submit_ms: int = Field(default=0, ge=0, le=600_000)
 
 
-class AIVersionOut(BaseModel):
-    version: int
-    created_at: str | None
-    drawings_seen: int
-    new_drawings: int
-    weights: dict[str, float]
-    rmse_model: float | None
-    rmse_crowd: float | None
-    rmse_blend: float | None
-    n_eval: int
-    note: str
+class TimeoutIn(PlayerRef):
+    edited: str = Field(default="", max_length=300)
+    trace: list[TracePoint] = Field(default_factory=list, max_length=600)
+    time_to_submit_ms: int = Field(default=0, ge=0, le=600_000)
+
+
+def player_out(p: Player) -> dict:
+    return {"player_id": p.id, "name": p.name, "runs": p.runs, "best_score": p.best_score}
+
+
+def run_out(run: Run) -> dict:
+    return {"id": run.id, "lives": run.lives, "max_lives": config.LIVES,
+            "streak": run.streak, "best_streak": run.best_streak, "score": run.score,
+            "snuck": run.snuck, "caught": run.caught, "rounds_played": run.rounds_played,
+            "over": run.ended_at is not None, "detector_version": run.detector_version}
+
+
+def round_out(rnd: Round, headline: Headline) -> dict:
+    return {
+        "id": rnd.id, "status": rnd.status, "is_bounty": rnd.is_bounty,
+        "timer_start_s": rnd.timer_start_s,
+        "remaining_s": round(max(0.0, game.remaining_s(rnd)), 3),
+        "attempts_used": rnd.attempts_used, "max_attempts": config.MAX_ATTEMPTS,
+        "headline": {
+            "id": headline.id, "text": headline.text, "snippet": headline.snippet,
+            "source": headline.source, "url": headline.url,
+            "published_at": headline.published_at.isoformat() + "Z"
+            if headline.published_at else None,
+        },
+    }
+
+
+def rules_out() -> dict:
+    return {"max_words": config.MAX_WORD_CHANGES, "threshold": config.SNEAK_THRESHOLD,
+            "near_miss_from": config.NEAR_MISS_FROM, "max_attempts": config.MAX_ATTEMPTS,
+            "lives": config.LIVES}

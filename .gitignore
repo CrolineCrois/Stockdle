@@ -25,3 +25,7 @@ data/*.db-shm
 # OS
 .DS_Store
 Thumbs.db
+
+# Trained detectors (rebuilt by setup / training scripts; DistilBERT is ~250MB)
+data/detectors/
+frontend/tsconfig.tsbuildinfo

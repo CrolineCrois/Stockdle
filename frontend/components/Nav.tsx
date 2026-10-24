@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 const LINKS = [
   { href: '/', label: 'Play' },
   { href: '/leaderboard', label: 'Leaderboard' },
-  { href: '/dashboard', label: 'Science' },
 ];
 
 export default function Nav({ right }: { right?: React.ReactNode }) {
@@ -16,9 +15,9 @@ export default function Nav({ right }: { right?: React.ReactNode }) {
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
         <Link href="/" className="group flex items-center gap-2">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-you text-sm font-black text-ink-950">
-            T
+            S
           </span>
-          <span className="text-sm font-bold tracking-[0.2em] text-chalk">TAPE</span>
+          <span className="text-sm font-bold tracking-[0.2em] text-chalk">SNEAK IT PAST</span>
         </Link>
         <nav className="flex items-center gap-1">
           {LINKS.map((l) => {

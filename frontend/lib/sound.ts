@@ -4,7 +4,7 @@
  * first gesture because browsers refuse to start one before user interaction.
  */
 
-const MUTE_KEY = 'tape.muted';
+const MUTE_KEY = 'sip.muted';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -76,38 +76,36 @@ export const sound = {
     return muted;
   },
 
-  /** Pitch rises with the height of the line, so drawing *sounds* like the shape. */
-  draw(value: number) {
+  /** A soft key click while editing. Throttled so fast typing doesn't buzz. */
+  key() {
     const now = performance.now();
-    if (now - lastTick < 38) return;
+    if (now - lastTick < 45) return;
     lastTick = now;
-    tone(220 + value * 520, 0.05, { type: 'triangle', gain: 0.12 });
+    tone(1400 + Math.random() * 300, 0.025, { type: 'triangle', gain: 0.05 });
   },
 
-  reveal() {
-    tone(330, 0.9, { type: 'sine', gain: 0.22, sweepTo: 660 });
-    tone(165, 0.9, { type: 'sine', gain: 0.1, sweepTo: 330 });
-  },
-
-  ghost() {
-    tone(520, 0.18, { type: 'sine', gain: 0.1 });
-    tone(690, 0.2, { type: 'sine', gain: 0.08, delay: 0.09 });
-  },
-
-  score(points: number) {
-    tone(440 + Math.min(points, 120) * 2.6, 0.12, { type: 'square', gain: 0.1 });
-  },
-
-  bullseye() {
+  /** Got past the detector. */
+  sneak() {
     [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
-      tone(f, 0.42, { type: 'triangle', gain: 0.26, delay: i * 0.085 }),
+      tone(f, 0.4, { type: 'triangle', gain: 0.24, delay: i * 0.08 }),
     );
   },
 
-  fail() {
-    tone(200, 0.34, { type: 'sawtooth', gain: 0.14, sweepTo: 90 });
+  /** Points counting up. */
+  score(step: number) {
+    tone(440 + Math.min(step, 40) * 22, 0.08, { type: 'square', gain: 0.06 });
   },
 
+  caught() {
+    tone(200, 0.4, { type: 'sawtooth', gain: 0.15, sweepTo: 80 });
+  },
+
+  invalid() {
+    tone(330, 0.16, { type: 'sine', gain: 0.12 });
+    tone(262, 0.2, { type: 'sine', gain: 0.12, delay: 0.12 });
+  },
+
+  /** Clock tick for the last five seconds. */
   tick() {
     tone(880, 0.05, { type: 'square', gain: 0.07 });
   },

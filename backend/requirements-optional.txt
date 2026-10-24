@@ -1,8 +1,6 @@
-# Optional extras. Everything degrades gracefully if these are absent.
-#   yfinance   -> live intraday stock prices + headlines  (fallback: data/seed)
-#   pytrends   -> live Google Trends interest-over-time    (fallback: data/seed)
-#   sentence-transformers -> headline embeddings           (fallback: VADER + keywords)
-yfinance==0.2.52
-pytrends==4.9.2
-# sentence-transformers pulls in torch (~2GB); only install if you want embeddings.
-# sentence-transformers==3.3.1
+# The real detector (phase 2+) and novelty embeddings. Heavy: pulls in torch.
+# Everything runs without these, on the stub detector and without novelty.
+transformers==4.47.1
+torch>=2.5
+datasets==3.2.0
+sentence-transformers==3.3.1

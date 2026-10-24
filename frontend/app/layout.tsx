@@ -3,8 +3,8 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'TAPE: Draw It',
-  description: 'Draw the future. Beat the AI. Teach it something.',
+  title: 'Sneak It Past',
+  description: 'Edit a true headline into a lie the AI can\'t catch. Every trick that works trains it.',
 };
 
 export const viewport: Viewport = {

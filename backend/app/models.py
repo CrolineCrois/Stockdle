@@ -1,150 +1,162 @@
-"""SQLite schema: players, rounds, drawings, ai_versions."""
+"""SQLite schema.
+
+    headlines          the pool of real, true headlines (+ article snippet)
+    players            display name only, no accounts
+    runs               one game: 3 lives, a streak, a score
+    rounds             one headline inside a run: its timer and attempt count
+    attempts           EVERY submission, valid or not -- the research log
+    detector_versions  each trained detector, so versions can be compared
+"""
 
 from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import (
-    Boolean,
-    DateTime,
-    Float,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-)
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    # Naive UTC: SQLite has no timezone type, so store everything as UTC.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Base(DeclarativeBase):
     pass
 
 
+class Headline(Base):
+    __tablename__ = "headlines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    text: Mapped[str] = mapped_column(String(300))
+    # Normalised text, unique: the dedup key across feeds and re-scrapes.
+    norm: Mapped[str] = mapped_column(String(300), unique=True, index=True)
+    snippet: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str] = mapped_column(String(80), default="")
+    url: Mapped[str] = mapped_column(String(500), default="")
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    scraped_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    is_seed: Mapped[bool] = mapped_column(Boolean, default=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    # Bounties: the headlines the current detector is most suspicious of
+    # *before* any edit -- sneaking a lie past it there is genuinely hard.
+    is_bounty: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    detector_p: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
 class Player(Base):
     __tablename__ = "players"
 
     id: Mapped[str] = mapped_column(String(40), primary_key=True)
-    name: Mapped[str] = mapped_column(String(32), index=True)
+    name: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     last_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    rounds_played: Mapped[int] = mapped_column(Integer, default=0)
-    total_score: Mapped[int] = mapped_column(Integer, default=0)
-    best_streak: Mapped[int] = mapped_column(Integer, default=0)
-    streak: Mapped[int] = mapped_column(Integer, default=0)
+    best_score: Mapped[int] = mapped_column(Integer, default=0)
+    runs: Mapped[int] = mapped_column(Integer, default=0)
     is_bot: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    drawings: Mapped[list["Drawing"]] = relationship(back_populates="player")
+
+class Run(Base):
+    __tablename__ = "runs"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    lives: Mapped[int] = mapped_column(Integer)
+    streak: Mapped[int] = mapped_column(Integer, default=0)
+    best_streak: Mapped[int] = mapped_column(Integer, default=0)
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    snuck: Mapped[int] = mapped_column(Integer, default=0)
+    caught: Mapped[int] = mapped_column(Integer, default=0)
+    rounds_played: Mapped[int] = mapped_column(Integer, default=0)
+    detector_version: Mapped[str] = mapped_column(String(20), default="")
 
 
 class Round(Base):
-    """One playable round. ``payload`` holds the full record incl. ``hidden``.
+    """One headline inside a run. The timer lives here, server-side.
 
-    The API never serialises ``payload`` directly -- see ``schemas.public_round``
-    -- so the answer cannot leak before submit.
+    ``paused_s`` accumulates time spent waiting on the judge, which never
+    counts against the player.
     """
 
     __tablename__ = "rounds"
 
     id: Mapped[str] = mapped_column(String(40), primary_key=True)
-    type: Mapped[str] = mapped_column(String(20), index=True)
-    source_key: Mapped[str] = mapped_column(String(40))
-    # Legacy: fake-headline rounds were removed. Kept so older databases load.
-    is_fake: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    is_seed: Mapped[bool] = mapped_column(Boolean, default=True)
-    payload_json: Mapped[str] = mapped_column(Text)
-    crowd_sum_json: Mapped[str] = mapped_column(Text, default="")
-    crowd_n: Mapped[int] = mapped_column(Integer, default=0)
-    play_count: Mapped[int] = mapped_column(Integer, default=0)
-    # False once a pipeline rebuild drops this round from the catalogue.
-    # Retired rounds are never dealt again, but are kept so the drawings and
-    # leaderboard scores that reference them stay intact.
-    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-
-    @property
-    def payload(self) -> dict:
-        return json.loads(self.payload_json)
-
-    @property
-    def crowd_sum(self) -> list[float] | None:
-        if not self.crowd_sum_json:
-            return None
-        return json.loads(self.crowd_sum_json)
-
-    @property
-    def crowd_mean(self) -> list[float] | None:
-        total = self.crowd_sum
-        if not total or self.crowd_n <= 0:
-            return None
-        return [v / self.crowd_n for v in total]
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"), index=True)
+    headline_id: Mapped[int] = mapped_column(ForeignKey("headlines.id"))
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    timer_start_s: Mapped[float] = mapped_column(Float)
+    paused_s: Mapped[float] = mapped_column(Float, default=0.0)
+    attempts_used: Mapped[int] = mapped_column(Integer, default=0)
+    is_bounty: Mapped[bool] = mapped_column(Boolean, default=False)
+    # active -> snuck | caught | timeout | exhausted (3 invalid attempts)
+    status: Mapped[str] = mapped_column(String(12), default="active")
 
 
-class Drawing(Base):
-    __tablename__ = "drawings"
-    __table_args__ = (
-        # Rate limit: one scored drawing per player per round.
-        UniqueConstraint("round_id", "player_id", name="uq_drawing_round_player"),
-        Index("ix_drawings_created", "created_at"),
-    )
+class Attempt(Base):
+    """Every submission, logged in full. This table *is* the dataset."""
+
+    __tablename__ = "attempts"
+    __table_args__ = (Index("ix_attempts_outcome_created", "outcome", "created_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     round_id: Mapped[str] = mapped_column(ForeignKey("rounds.id"), index=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"), index=True)
     player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    attempt_no: Mapped[int] = mapped_column(Integer)
 
-    curve_json: Mapped[str] = mapped_column(Text)
-    time_ms: Mapped[int] = mapped_column(Integer, default=0)
-    mode: Mapped[str] = mapped_column(String(10), default="endless")
-    round_type: Mapped[str] = mapped_column(String(20), index=True)
-    is_fake: Mapped[bool] = mapped_column(Boolean, default=False)   # legacy, always False
+    headline_id: Mapped[int] = mapped_column(ForeignKey("headlines.id"), index=True)
+    original_headline: Mapped[str] = mapped_column(String(300))
+    edited_headline: Mapped[str] = mapped_column(String(400))
+    changed_words_json: Mapped[str] = mapped_column(Text, default="[]")
+    num_words_changed: Mapped[int] = mapped_column(Integer, default=0)
 
-    base_score: Mapped[int] = mapped_column(Integer, default=0)
-    total_score: Mapped[int] = mapped_column(Integer, default=0)
-    rmse: Mapped[float] = mapped_column(Float, default=0.0)
-    ai_rmse: Mapped[float | None] = mapped_column(Float, nullable=True)
-    crowd_rmse: Mapped[float | None] = mapped_column(Float, nullable=True)
-    beat_ai: Mapped[bool] = mapped_column(Boolean, default=False)
-    beat_crowd: Mapped[bool] = mapped_column(Boolean, default=False)
-    bullseye: Mapped[bool] = mapped_column(Boolean, default=False)
+    suspicion_score_final: Mapped[float | None] = mapped_column(Float, nullable=True)
+    suspicion_trace_json: Mapped[str] = mapped_column(Text, default="[]")
+    judge_output_json: Mapped[str] = mapped_column(Text, default="{}")
+    edit_type: Mapped[str] = mapped_column(String(30), default="")
 
-    # Bias analytics (see /api/dashboard).
-    signed_error: Mapped[float] = mapped_column(Float, default=0.0)
-    pred_move: Mapped[float] = mapped_column(Float, default=0.0)
-    true_move: Mapped[float] = mapped_column(Float, default=0.0)
-    player_round_index: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    # snuck | caught | invalid | timeout
+    outcome: Mapped[str] = mapped_column(String(10), index=True)
+    points: Mapped[int] = mapped_column(Integer, default=0)
+    streak: Mapped[int] = mapped_column(Integer, default=0)      # after this attempt
+    lives_left: Mapped[int] = mapped_column(Integer, default=0)
+    detector_version: Mapped[str] = mapped_column(String(20), index=True)
+    novelty_distance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_novel: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_bounty: Mapped[bool] = mapped_column(Boolean, default=False)
+    time_to_submit_ms: Mapped[int] = mapped_column(Integer, default=0)
 
-    player: Mapped[Player] = relationship(back_populates="drawings")
+    timer_start_seconds: Mapped[float] = mapped_column(Float, default=0.0)
+    time_remaining_at_submit: Mapped[float] = mapped_column(Float, default=0.0)
+    timed_out: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Set by a later patch day once a newer detector catches this exploit.
+    patched_in: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     @property
-    def curve(self) -> list[float]:
-        return json.loads(self.curve_json)
+    def changed_words(self) -> list[dict]:
+        return json.loads(self.changed_words_json)
+
+    @property
+    def judge_output(self) -> dict:
+        return json.loads(self.judge_output_json)
 
 
-class AIVersion(Base):
-    __tablename__ = "ai_versions"
+class DetectorVersion(Base):
+    __tablename__ = "detector_versions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    version: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(20), unique=True)    # "stub", "v0", "v1"...
+    kind: Mapped[str] = mapped_column(String(20))                 # "baseline" | "distilbert"
+    path: Mapped[str] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    drawings_seen: Mapped[int] = mapped_column(Integer, default=0)
-    new_drawings: Mapped[int] = mapped_column(Integer, default=0)
-    weights_json: Mapped[str] = mapped_column(Text, default="{}")
-    rmse_model: Mapped[float | None] = mapped_column(Float, nullable=True)
-    rmse_crowd: Mapped[float | None] = mapped_column(Float, nullable=True)
-    rmse_blend: Mapped[float | None] = mapped_column(Float, nullable=True)
-    n_eval: Mapped[int] = mapped_column(Integer, default=0)
-    base_refit: Mapped[bool] = mapped_column(Boolean, default=False)
-    note: Mapped[str] = mapped_column(String(200), default="")
-
-    @property
-    def weights(self) -> dict[str, float]:
-        try:
-            return json.loads(self.weights_json)
-        except Exception:  # noqa: BLE001
-            return {}
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    n_train: Mapped[int] = mapped_column(Integer, default=0)
+    metrics_json: Mapped[str] = mapped_column(Text, default="{}")
+    note: Mapped[str] = mapped_column(String(300), default="")
