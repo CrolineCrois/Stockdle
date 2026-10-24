@@ -13,6 +13,7 @@
     GET  /api/detector/versions         every detector version and its metrics
     POST /api/admin/patch-day           run a patch day (x-admin-token)
     GET  /api/analytics                 everything on the /lab dashboard
+    GET  /api/verifier/versions         evidence-verifier versions and which is live
     GET  /api/admin/review              exploit review queue + counters (x-admin-token)
     POST /api/admin/review/{id}         approve / reject an exploit (x-admin-token)
     GET  /api/health                    status, current detector, judge in use
@@ -380,3 +381,15 @@ def review_decide(attempt_id: int, body: ReviewIn,
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
     return {"id": a.id, "review_status": a.review_status, "stats": review.stats(db)}
+
+
+@app.get("/api/verifier/versions")
+def verifier_versions() -> dict:
+    """Every evidence-verifier version: what it trained on, and which is live."""
+    from verifier import registry as verifiers
+    current = verifiers.current_name()
+    return {"current": current, "versions": [{
+        "name": v.name, "created_at": v.created_at.isoformat() + "Z", "train_data": v.train_data,
+        "n_train": v.n_train, "note": v.note, "is_current": v.name == current,
+        "metrics": json.loads(v.metrics_json or "{}"),
+    } for v in verifiers.versions()]}

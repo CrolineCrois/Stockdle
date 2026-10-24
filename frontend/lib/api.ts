@@ -374,3 +374,19 @@ export const adminApi = {
       body: JSON.stringify({ decision, reviewer, note }),
     }),
 };
+
+export interface ModelVersion {
+  name: string;
+  created_at: string;
+  n_train: number;
+  note: string;
+  is_current: boolean;
+  metrics: Record<string, unknown>;
+  kind?: string;
+  train_data?: string;
+}
+
+export const versionsApi = {
+  verifier: () => request<{ current: string; versions: ModelVersion[] }>('/api/verifier/versions'),
+  meter: () => request<{ current: string; versions: ModelVersion[] }>('/api/detector/versions'),
+};

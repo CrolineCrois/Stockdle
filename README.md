@@ -101,8 +101,9 @@ on CPU (~0.25 s per verification, on submit only).
 | `npm run patch-style` | Retrain the first-glance style model on exploits |
 | `npm test` | Backend tests (no model downloads or API calls) |
 
-Pages: `/` start, `/play`, `/board` (exploit board + best runs), `/lab` (analytics),
-`/admin` (review; token `SIP_ADMIN_TOKEN`, default `sneak-demo`).
+Pages: `/` start, `/play`, `/board` (exploit board + best runs), `/learn` (how the AI
+learns, step by step, with live numbers), `/lab` (analytics), `/admin` (review; token
+`SIP_ADMIN_TOKEN`, default `sneak-demo`).
 
 ---
 
