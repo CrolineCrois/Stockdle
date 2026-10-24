@@ -39,15 +39,20 @@ def load_split(heads: list[Headline], seed: int = 7) -> set[int]:
 
 
 def synthetic_examples(db, heads: list[Headline], generator: str | None = None):
-    """(pairs, labels) for the given headlines and their synthetic fakes."""
+    """(pairs, labels) for the given headlines and their synthetic fakes.
+
+    Each pair is (headline, premise), where the premise is the source passage
+    the meter reads at play time (``detector.premise``), so training matches use.
+    """
+    from .premise import premise_for
     q = select(SyntheticFake).where(SyntheticFake.headline_id.in_([h.id for h in heads]))
     if generator:
         q = q.where(SyntheticFake.generator == generator)
     by_id = {h.id: h for h in heads}
-    pairs = [(h.text, h.snippet) for h in heads]
+    pairs = [(h.text, premise_for(h.id)) for h in heads]
     labels = [0] * len(heads)
     for f in db.scalars(q).all():
-        pairs.append((f.text, by_id[f.headline_id].snippet))
+        pairs.append((f.text, premise_for(f.headline_id)))
         labels.append(1)
     return pairs, labels
 

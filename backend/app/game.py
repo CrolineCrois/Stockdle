@@ -103,8 +103,10 @@ def next_round(db: Session, run: Run) -> Round:
 
 
 def suspicion(headline: Headline, edited: str) -> float:
-    """The style model's "first glance" score for the live meter."""
-    return round(predict_one(registry.current(), edited, headline.snippet), 4)
+    """The "first glance" score for the live meter: a small fast model reading the
+    edit against the source passage the verifier is most likely to use."""
+    from detector.premise import premise_for
+    return round(predict_one(registry.current(), edited, premise_for(headline.id)), 4)
 
 
 # --- submissions -----------------------------------------------------------

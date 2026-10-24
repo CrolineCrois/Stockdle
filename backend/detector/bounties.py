@@ -25,7 +25,8 @@ def refresh(fraction: float | None = None) -> int:
         rows = db.scalars(select(Headline).where(Headline.active)).all()
         if not rows:
             return 0
-        scores = det.predict([(h.text, h.snippet) for h in rows])
+        from .premise import premise_for
+        scores = det.predict([(h.text, premise_for(h.id)) for h in rows])
         for h, p in zip(rows, scores):
             h.detector_p = round(p, 4)
         n = max(1, int(round(len(rows) * fraction)))

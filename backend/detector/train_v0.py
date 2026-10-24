@@ -26,6 +26,7 @@ from app.models import Headline, SyntheticFake
 from ingest.make_fakes import generate
 
 from . import registry
+from .premise import premise_for
 from .bounties import refresh as refresh_bounties
 from .transformer import finetune
 from .evaluate import metrics, ship_check
@@ -53,7 +54,7 @@ def main() -> None:
         train_h, val_h, test_h = train_val_test(heads)
         tr_pairs, tr_labels = synthetic_examples(db, train_h, generator)
         te_pairs, te_labels = synthetic_examples(db, test_h, generator)
-        val_true = [(h.text, h.snippet) for h in val_h]
+        val_true = [(h.text, premise_for(h.id)) for h in val_h]
 
     print(f"[v0] training on {len(tr_labels)} pairs ({sum(tr_labels)} fakes, generator={generator})")
     det = finetune(NAME, config.DETECTOR_BASE_MODEL, tr_pairs, tr_labels, epochs=args.epochs,

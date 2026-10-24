@@ -39,6 +39,7 @@ from app.db import SessionLocal, init_db
 from app.models import Attempt, DetectorVersion, Headline
 
 from . import registry
+from .premise import premise_for
 from .bounties import refresh as refresh_bounties
 from .evaluate import catch_rate, metrics, ship_check
 
@@ -89,22 +90,22 @@ def run(*, include_mock: bool = False, dry_run: bool = False, epochs: int = 4,
         from .splits import synthetic_examples, train_val_test
         train_h, val_h, test_h = train_val_test(heads)
         test_ids = {h.id for h in test_h}
-        val_true = [(h.text, h.snippet) for h in val_h]
+        val_true = [(h.text, premise_for(h.id)) for h in val_h]
         # Exploits are human data and always train; their original headline joins
         # the true set only if it isn't a held-out test/validation headline.
         held = test_ids | {h.id for h in val_h}
-        pairs = [(a.edited_headline, h.snippet) for a, h in train]
+        pairs = [(a.edited_headline, premise_for(h.id)) for a, h in train]
         labels = [1] * len(train)
         originals = {h.id: h for _, h in train if h.id not in held}
-        pairs += [(h.text, h.snippet) for h in originals.values()]
+        pairs += [(h.text, premise_for(h.id)) for h in originals.values()]
         labels += [0] * len(originals)
         syn_pairs, syn_labels = synthetic_examples(db, train_h)
         pairs += syn_pairs
         labels += syn_labels
         syn_test = synthetic_examples(db, [h for h in heads if h.id in test_ids])
 
-        hold_pairs = [(a.edited_headline, h.snippet) for a, h in hold]
-        true_pairs = [(h.text, h.snippet) for h in heads if h.id in test_ids]
+        hold_pairs = [(a.edited_headline, premise_for(h.id)) for a, h in hold]
+        true_pairs = [(h.text, premise_for(h.id)) for h in heads if h.id in test_ids]
         current_name, current_kind, current_path = current.name, current.kind, current.path
 
     log(f"[patch] {name}: {len(train)} exploits to learn, {len(hold)} held out, "
@@ -151,7 +152,7 @@ def run(*, include_mock: bool = False, dry_run: bool = False, epochs: int = 4,
         all_snuck = db.execute(select(Attempt, Headline).join(Headline, Headline.id == Attempt.headline_id)
                                .where(Attempt.outcome == "snuck", Attempt.patched_in.is_(None))).all()
         if all_snuck:
-            probs = det.predict([(a.edited_headline, h.snippet) for a, h in all_snuck])
+            probs = det.predict([(a.edited_headline, premise_for(h.id)) for a, h in all_snuck])
             patched = 0
             for (a, _), p in zip(all_snuck, probs):
                 if p >= config.SNEAK_THRESHOLD:

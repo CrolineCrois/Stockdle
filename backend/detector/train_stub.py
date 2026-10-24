@@ -24,6 +24,7 @@ from app.models import DetectorVersion, Headline
 from ingest.perturb import entity_pool, make_fakes
 
 from . import registry
+from .premise import premise_for
 from .baseline import BaselineDetector
 from .bounties import refresh as refresh_bounties
 from .splits import load_split
@@ -35,10 +36,10 @@ def build_examples(headlines: list[Headline], rng: random.Random):
     pool = entity_pool([h.text for h in headlines])
     pairs, labels = [], []
     for h in headlines:
-        pairs.append((h.text, h.snippet))
+        pairs.append((h.text, premise_for(h.id)))
         labels.append(0)
         for fake, _kind in make_fakes(h.text, pool, rng):
-            pairs.append((fake, h.snippet))
+            pairs.append((fake, premise_for(h.id)))
             labels.append(1)
     return pairs, labels
 
