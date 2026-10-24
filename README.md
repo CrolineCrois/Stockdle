@@ -27,8 +27,10 @@ The game produces:
 ## How a round works
 
 You get a real headline and a snippet of its article. Change **up to three words**
-to make it false. A **first-glance meter** (a fast style model) reacts as you type —
-it's only a hint. On submit:
+to make it false. A **first-glance meter** reacts as you type: the fact-checker's read of
+your edit against the single best passage of the source article (~0.1 s). It's only a
+preview — on submit the fact-checker searches more evidence and makes the real call
+(`SIP_METER=style` switches the meter to the small style model instead). On submit:
 
 1. **The judge rules — twice.** An LLM judge reads the original, the snippet and
    your edit with two differently worded prompts. Both must agree it's false, or it

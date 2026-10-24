@@ -102,3 +102,7 @@ VERIFIER_TOP_K = _env("SIP_VERIFIER_TOP_K", 3)
 # A passage refutes / supports the claim when its probability clears this.
 VERIFIER_DECIDE_AT = _env("SIP_VERIFIER_DECIDE_AT", 0.5)
 VERIFIER_MAX_LEN = _env("SIP_VERIFIER_MAX_LEN", 256)
+
+# What drives the live meter: "glance" = the evidence verifier on the single best
+# source passage (tracks the real verdict, ~0.1 s); "style" = the small style model.
+METER = _env("SIP_METER", "glance")

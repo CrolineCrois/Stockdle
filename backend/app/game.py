@@ -44,6 +44,7 @@ from sqlalchemy.orm import Session
 from detector import registry
 from detector.base import predict_one
 from judge import JudgeUnavailable, get_judge, judge_twice
+from verifier import registry as verifiers
 from verifier.verify import BREAKING, EVIDENCE, Verification, verify
 
 from . import config, novelty, scoring
@@ -103,10 +104,18 @@ def next_round(db: Session, run: Run) -> Round:
 
 
 def suspicion(headline: Headline, edited: str) -> float:
-    """The "first glance" score for the live meter: a small fast model reading the
-    edit against the source passage the verifier is most likely to use."""
+    """The "first glance" score for the live meter, read against the source passage
+    the verifier is most likely to use.
+
+    By default it is the evidence verifier's P(refuted) on that one passage: a cheap
+    preview that tracks the real verdict (which reads the top 3 retrieved passages)
+    without being it. ``SIP_METER=style`` uses the small style model instead.
+    """
     from detector.premise import premise_for
-    return round(predict_one(registry.current(), edited, premise_for(headline.id)), 4)
+    premise = premise_for(headline.id)
+    if config.METER == "style":
+        return round(predict_one(registry.current(), edited, premise), 4)
+    return round(verifiers.current().score(edited, [premise])[0]["refuted"], 4)
 
 
 # --- submissions -----------------------------------------------------------

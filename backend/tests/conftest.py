@@ -11,4 +11,5 @@ shutil.copytree(_repo_seed, _tmp / "seed")
 os.environ["SIP_DATA_DIR"] = str(_tmp)
 os.environ["SIP_DB"] = str(_tmp / "test.db")
 os.environ["SIP_JUDGE"] = "mock"
+os.environ["SIP_METER"] = "style"        # no verifier model download in tests
 os.environ.pop("ANTHROPIC_API_KEY", None)

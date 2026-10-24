@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * The live "first glance" meter: a fast style model's read of the edit as you
- * type. It does NOT decide the round -- the evidence verifier does, on submit
- * -- so it is labelled as a hint. The needle eases so it swings, not jumps.
+ * The live "first glance" meter: the fact-checker's read of your edit against
+ * the single best source passage, as you type. It does NOT decide the round --
+ * on submit the verifier reads the top retrieved passages and rules -- so it is
+ * labelled as a hint. The needle eases so it swings, not jumps.
  */
 
 import { motion } from 'framer-motion';
@@ -56,7 +57,7 @@ export default function SuspicionMeter({
         <span>looks false</span>
       </div>
       <p className="mt-1 text-[11px] text-chalk-faint">
-        A quick style read. The real verdict comes from checking the evidence when you submit.
+        A quick look at the source article. On submit the fact-checker searches more evidence and makes the real call.
       </p>
     </div>
   );

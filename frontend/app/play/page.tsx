@@ -42,7 +42,7 @@ import { readPlayer, signIn, type StoredPlayer } from '@/lib/player';
 import { sound } from '@/lib/sound';
 
 type Phase = 'loading' | 'editing' | 'judging' | 'result' | 'over' | 'error';
-const METER_DEBOUNCE_MS = 300;
+const METER_DEBOUNCE_MS = 450;   // long enough that half-typed words aren't scored
 
 export default function Play() {
   const router = useRouter();
