@@ -160,3 +160,21 @@ class DetectorVersion(Base):
     n_train: Mapped[int] = mapped_column(Integer, default=0)
     metrics_json: Mapped[str] = mapped_column(Text, default="{}")
     note: Mapped[str] = mapped_column(String(300), default="")
+
+
+class SyntheticFake(Base):
+    """A machine-made false variant of a true headline: v0 training data.
+
+    Synthetic misinformation, like player exploits: it stays in this table,
+    labelled with what generated it, and is never shown to players.
+    """
+
+    __tablename__ = "synthetic_fakes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    headline_id: Mapped[int] = mapped_column(ForeignKey("headlines.id"), index=True)
+    text: Mapped[str] = mapped_column(String(400))
+    edit_type: Mapped[str] = mapped_column(String(30), default="")
+    generator: Mapped[str] = mapped_column(String(10))           # "claude" | "rules"
+    model: Mapped[str] = mapped_column(String(40), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

@@ -8,6 +8,7 @@
  *
  *   node scripts/tasks.mjs setup      venv, deps, seed headlines, stub detector, frontend
  *   node scripts/tasks.mjs dev        API (:8000) and web app (:3000) together
+ *   node scripts/tasks.mjs setup-ml   torch + transformers, training fakes, DistilBERT v0
  *   node scripts/tasks.mjs scrape     pull fresh headlines from the RSS feeds
  *   node scripts/tasks.mjs test       backend test suite
  */
@@ -106,6 +107,17 @@ const tasks = {
   scrape: () => run(py(), ['-m', 'ingest.scrape_rss'], { cwd: BACKEND }),
   seed: () => run(py(), ['-m', 'ingest.seed'], { cwd: BACKEND }),
   'train-stub': () => run(py(), ['-m', 'detector.train_stub'], { cwd: BACKEND }),
+  /** The real detector: installs torch/transformers (~1GB), makes fakes, trains v0. */
+  async 'setup-ml'() {
+    console.log('→ installing ML requirements (torch, transformers, sentence-transformers)');
+    await run(py(), ['-m', 'pip', 'install', '-q', '-r', 'requirements-optional.txt'], { cwd: BACKEND });
+    console.log('→ generating training fakes (Claude if ANTHROPIC_API_KEY is set, else rules)');
+    await run(py(), ['-m', 'ingest.make_fakes'], { cwd: BACKEND });
+    console.log('→ training detector v0 (DistilBERT)');
+    await run(py(), ['-m', 'detector.train_v0'], { cwd: BACKEND });
+  },
+  fakes: () => run(py(), ['-m', 'ingest.make_fakes'], { cwd: BACKEND }),
+  'train-v0': () => run(py(), ['-m', 'detector.train_v0'], { cwd: BACKEND }),
   bounties: () => run(py(), ['-m', 'detector.bounties'], { cwd: BACKEND }),
   test: () => run(py(), ['-m', 'pytest'], { cwd: BACKEND }),
   build: () => run('npm', ['run', 'build'], { cwd: FRONTEND }),

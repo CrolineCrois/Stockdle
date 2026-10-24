@@ -48,6 +48,7 @@ async def lifespan(_app: FastAPI):
     init_db()
     try:
         det = registry.current_name()
+        registry.current().predict([("warm up", "warm up")])   # load weights now, not on first keystroke
     except LookupError:
         det = "none (run `python -m detector.train_stub`)"
     print(f"[api] ready — detector {det}, judge {get_judge().name}", flush=True)

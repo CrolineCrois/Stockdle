@@ -10,7 +10,10 @@
     "dev:web": "node scripts/tasks.mjs web",
     "scrape": "node scripts/tasks.mjs scrape",
     "seed": "node scripts/tasks.mjs seed",
+    "setup:ml": "node scripts/tasks.mjs setup-ml",
+    "fakes": "node scripts/tasks.mjs fakes",
     "train-stub": "node scripts/tasks.mjs train-stub",
+    "train-v0": "node scripts/tasks.mjs train-v0",
     "bounties": "node scripts/tasks.mjs bounties",
     "test": "node scripts/tasks.mjs test",
     "build": "node scripts/tasks.mjs build"

@@ -7,7 +7,9 @@ disk after the first call.
 
 from __future__ import annotations
 
+import json
 import threading
+import time
 from pathlib import Path
 
 from sqlalchemy import select, update
@@ -19,7 +21,11 @@ from .base import Detector
 
 _cache: dict[str, Detector] = {}
 _current: str | None = None
+_checked_at = 0.0
 _lock = threading.Lock()
+# How often a running server re-reads which version is live, so a patch day
+# (a separate process) takes effect without a restart.
+RECHECK_S = 5.0
 
 
 def _load_row(row: DetectorVersion) -> Detector:
@@ -44,13 +50,14 @@ def load(name: str) -> Detector:
 
 
 def current_name() -> str:
-    global _current
-    if _current is None:
+    global _current, _checked_at
+    if _current is None or time.monotonic() - _checked_at > RECHECK_S:
         with SessionLocal() as db:
-            _current = db.scalar(select(DetectorVersion.name)
-                                 .where(DetectorVersion.is_current))
-        if _current is None:
+            name = db.scalar(select(DetectorVersion.name).where(DetectorVersion.is_current))
+        _checked_at = time.monotonic()
+        if name is None:
             raise LookupError("no current detector; run `python -m detector.train_stub`")
+        _current = name
     return _current
 
 
@@ -76,3 +83,25 @@ def forget() -> None:
     with _lock:
         _cache.clear()
         _current = None
+
+
+def register(name: str, kind: str, path: Path, *, n_train: int, metrics: dict, note: str,
+             make_current: bool) -> None:
+    """Record a trained version (replacing a same-named one) and optionally go live."""
+    with SessionLocal() as db:
+        row = db.scalar(select(DetectorVersion).where(DetectorVersion.name == name))
+        if row is None:
+            row = DetectorVersion(name=name, kind=kind, path=str(path))
+            db.add(row)
+        row.kind, row.path, row.n_train = kind, str(path), n_train
+        row.metrics_json, row.note = json.dumps(metrics), note[:300]
+        db.commit()
+    with _lock:
+        _cache.pop(name, None)
+    if make_current:
+        set_current(name)
+
+
+def versions() -> list[DetectorVersion]:
+    with SessionLocal() as db:
+        return list(db.scalars(select(DetectorVersion).order_by(DetectorVersion.created_at)).all())

@@ -79,3 +79,9 @@ CORS_ORIGINS = [o for o in _env(
 ).split(",") if o]
 ADMIN_TOKEN = _env("SIP_ADMIN_TOKEN", "sneak-demo")
 SUSPICION_RATE_PER_S = _env("SIP_SUSPICION_RATE_PER_S", 8.0)   # live-meter calls
+
+# --- detector training (phase 2+) -------------------------------------------
+# The LLM that writes v0's training fakes. Only used when an API key is set.
+FAKES_MODEL = _env("SIP_FAKES_MODEL", "claude-opus-5-5")
+DETECTOR_BASE_MODEL = _env("SIP_DETECTOR_BASE", "distilbert-base-uncased")
+DETECTOR_MAX_LEN = _env("SIP_DETECTOR_MAX_LEN", 128)

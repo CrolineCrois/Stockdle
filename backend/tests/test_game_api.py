@@ -17,7 +17,7 @@ def client():
     from ingest.seed import main as seed
     import sys
     seed()
-    argv, sys.argv = sys.argv, ["train_stub"]
+    argv, sys.argv = sys.argv, ["train_stub", "--make-current"]
     try:
         train()
     finally:
