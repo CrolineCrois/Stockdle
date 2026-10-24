@@ -108,11 +108,15 @@ def test_a_valid_lie_is_judged_scored_and_logged(client):
 
 
 def test_three_invalid_attempts_exhaust_the_round_without_losing_a_life(client):
-    pid, state = new_run(client)
+    fillers = {"to", "in", "of", "the", "a", "for", "on"}
+    for _ in range(30):                     # deal until a headline has a function word
+        pid, state = new_run(client)
+        words = headline_of(state).split()
+        if any(w.lower() in fillers for w in words):
+            break
     rid, text = state["round"]["id"], headline_of(state)
-    words = text.split()
     # A harmless edit: duplicate-free, plausible, but changes only a function word.
-    first = next(i for i, w in enumerate(words) if w.lower() in {"to", "in", "of", "the", "a", "for", "on"})
+    first = next(i for i, w in enumerate(words) if w.lower() in fillers)
     bodies = []
     for filler in ("the", "a", "of"):
         edited = " ".join(words[:first] + [filler] + words[first + 1:])
@@ -212,3 +216,64 @@ def test_first_exploit_is_a_zero_day_and_reaches_the_board(client):
     if att.is_novel:
         assert "zero_day" in body["events"] and body["points"]["novelty_mult"] == 1.5
         assert any(r["id"] == att.id for r in board["rows"])
+
+
+def _fake_exploits(n: int, judge: str = "claude") -> str:
+    """Insert ``n`` judge-verified exploits for a fresh player; return the player id."""
+    import json
+    import uuid
+    from app.models import Player, Run
+    from app.models import Round as RoundRow
+    with SessionLocal() as db:
+        pid = uuid.uuid4().hex[:24]
+        db.add(Player(id=pid, name="Patchee"))
+        run = Run(id=uuid.uuid4().hex[:20], player_id=pid, lives=3, detector_version="stub")
+        db.add(run)
+        heads = db.query(Headline).filter(Headline.active).limit(n).all()
+        for h in heads:
+            rnd = RoundRow(id=uuid.uuid4().hex[:20], run_id=run.id, headline_id=h.id,
+                           timer_start_s=20, status="snuck")
+            db.add(rnd)
+            db.flush()
+            db.add(Attempt(round_id=rnd.id, run_id=run.id, player_id=pid, attempt_no=1,
+                           headline_id=h.id, original_headline=h.text,
+                           edited_headline=lie(h.text), outcome="snuck", points=100,
+                           detector_version="stub", suspicion_score_final=0.2,
+                           judge_output_json=json.dumps({"judge": judge, "is_false": True})))
+        db.commit()
+    return pid
+
+
+def test_patch_day_refuses_without_enough_exploits(client):
+    from detector import patch_day
+    result = patch_day.run(min_exploits=10_000)
+    assert not result["shipped"] and "need" in result["reason"]
+
+
+def test_patch_day_ignores_mock_judged_exploits_by_default(client):
+    from detector import patch_day
+    _fake_exploits(12, judge="mock")
+    before = len(patch_day.exploits(SessionLocal(), include_mock=False))
+    with_mock = len(patch_day.exploits(SessionLocal(), include_mock=True))
+    assert with_mock >= before + 12
+
+
+def test_patch_day_ships_a_version_and_notifies_players(client):
+    from detector import patch_day
+    pid = _fake_exploits(20)
+    result = patch_day.run(min_exploits=5, log=lambda *_: None)
+    assert result["shipped"] and result["name"].startswith("v")
+    assert registry.current_name() == result["name"]
+    assert result["holdout_catch_after"] is None or 0 <= result["holdout_catch_after"] <= 1
+    assert client.get("/api/health").json()["detector"] == result["name"]
+    versions = client.get("/api/detector/versions").json()
+    assert versions["current"] == result["name"]
+    notices = client.get(f"/api/player/{pid}/notices").json()["notices"]
+    if result.get("newly_patched"):
+        assert notices and all(n["label"].startswith("FAKE") for n in notices)
+        assert client.get(f"/api/player/{pid}/notices").json()["notices"] == []   # shown once
+    registry.set_current("stub")
+
+
+def test_admin_patch_day_needs_the_token(client):
+    assert client.post("/api/admin/patch-day").status_code == 401

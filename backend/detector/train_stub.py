@@ -77,7 +77,7 @@ def main() -> None:
     with SessionLocal() as db:
         row = db.scalar(select(DetectorVersion).where(DetectorVersion.name == NAME))
         if row is None:
-            row = DetectorVersion(name=NAME, kind="baseline", path=str(path.parent))
+            row = DetectorVersion(name=NAME, kind="baseline", path=str(path))
             db.add(row)
         row.n_train, row.metrics_json = len(all_labels), json.dumps(metrics)
         row.note = "phase-1 stub: logistic regression on headline-vs-snippet features"

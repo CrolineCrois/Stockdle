@@ -22,10 +22,12 @@ import Nav from '@/components/Nav';
 import OutcomeCard from '@/components/OutcomeCard';
 import ShareCard from '@/components/ShareCard';
 import SuspicionMeter from '@/components/SuspicionMeter';
+import Toasts, { type ToastMessage } from '@/components/Toast';
 import TimerBar from '@/components/TimerBar';
 import {
   ApiError,
   api,
+  noticesApi,
   type GameState,
   type MeterReading,
   type SubmitResult,
@@ -52,6 +54,7 @@ export default function Play() {
   const [error, setError] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
   const [confetti, setConfetti] = useState(0);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const deadlineRef = useRef(0);          // performance.now() at which the clock hits 0
   const roundShownRef = useRef(0);        // performance.now() when the headline appeared
@@ -94,6 +97,20 @@ export default function Play() {
       .then((info) => {
         const p = { player_id: info.player_id, name: info.name };
         setPlayer(p);
+        // Patch days since your last visit that caught one of your exploits.
+        noticesApi
+          .list(p.player_id)
+          .then(({ notices }) => {
+            const byVersion = new Map<string, number>();
+            notices.forEach((n) => byVersion.set(n.patched_in, (byVersion.get(n.patched_in) ?? 0) + 1));
+            setToasts([...byVersion].map(([v, n], i) => ({
+              id: Date.now() + i,
+              title: `🛠 Patch ${v} closed ${n} of your exploit${n === 1 ? '' : 's'}`,
+              body: 'The detector learned your trick. Find a new one.',
+              tone: 'ai' as const,
+            })));
+          })
+          .catch(() => undefined);
         return api.startRun(p.player_id);
       })
       .then(beginRound)
@@ -277,6 +294,7 @@ export default function Play() {
     <>
       <Nav right={hud} />
       <Confetti fire={confetti} />
+      <Toasts messages={toasts} onExpire={(id) => setToasts((t) => t.filter((m) => m.id !== id))} ttl={7000} />
       <main className="mx-auto w-full max-w-3xl space-y-4 px-4 pb-16 pt-5">
         {phase === 'error' && (
           <div className="panel p-5">

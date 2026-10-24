@@ -118,6 +118,7 @@ const tasks = {
   },
   fakes: () => run(py(), ['-m', 'ingest.make_fakes'], { cwd: BACKEND }),
   'train-v0': () => run(py(), ['-m', 'detector.train_v0'], { cwd: BACKEND }),
+  'patch-day': () => run(py(), ['-m', 'detector.patch_day', ...process.argv.slice(3)], { cwd: BACKEND }),
   bounties: () => run(py(), ['-m', 'detector.bounties'], { cwd: BACKEND }),
   test: () => run(py(), ['-m', 'pytest'], { cwd: BACKEND }),
   build: () => run('npm', ['run', 'build'], { cwd: FRONTEND }),

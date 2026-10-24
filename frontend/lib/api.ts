@@ -210,3 +210,17 @@ export interface ExploitRow {
 export const exploitsApi = {
   list: (limit = 20) => request<{ label: string; rows: ExploitRow[] }>(`/api/exploits?limit=${limit}`),
 };
+
+export interface PatchNotice {
+  id: number;
+  patched_in: string;
+  original: string;
+  changes: WordChange[];
+  label: string;
+}
+
+export const noticesApi = {
+  /** Exploits of yours caught by a later patch day. Each is returned once. */
+  list: (playerId: string) =>
+    request<{ notices: PatchNotice[] }>(`/api/player/${encodeURIComponent(playerId)}/notices`),
+};

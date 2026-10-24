@@ -8,17 +8,23 @@
     POST /api/round/{id}/submit         judge + score one attempt
     POST /api/round/{id}/timeout        the clock ran out
     GET  /api/leaderboard               best runs
+    GET  /api/exploits                  the Exploit Board (labelled fakes)
+    GET  /api/player/{id}/notices       "your exploit was patched"
+    GET  /api/detector/versions         every detector version and its metrics
+    POST /api/admin/patch-day           run a patch day (x-admin-token)
     GET  /api/health                    status, current detector, judge in use
 """
 
 from __future__ import annotations
 
+import json
+import threading
 import time
 import uuid
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -248,3 +254,60 @@ def exploit_board(limit: int = 20, db: Session = Depends(get_session)) -> dict:
         "detector_version": a.detector_version, "patched_in": a.patched_in,
         "created_at": a.created_at.isoformat() + "Z",
     } for a, name in rows]}
+
+
+@app.get("/api/player/{player_id}/notices")
+def notices(player_id: str, db: Session = Depends(get_session)) -> dict:
+    """Exploits of yours that a patch day has since caught. Each is shown once."""
+    rows = db.scalars(select(Attempt).where(
+        Attempt.player_id == player_id, Attempt.outcome == "snuck",
+        Attempt.patched_in.is_not(None), ~Attempt.patch_notified)).all()
+    out = [{"id": a.id, "patched_in": a.patched_in, "original": a.original_headline,
+            "changes": a.changed_words, "label": FAKE_LABEL} for a in rows]
+    for a in rows:
+        a.patch_notified = True
+    db.commit()
+    return {"notices": out}
+
+
+@app.get("/api/detector/versions")
+def detector_versions() -> dict:
+    current = registry.current_name()
+    return {"current": current, "versions": [{
+        "name": v.name, "kind": v.kind, "created_at": v.created_at.isoformat() + "Z",
+        "n_train": v.n_train, "metrics": json.loads(v.metrics_json or "{}"), "note": v.note,
+        "is_current": v.name == current,
+    } for v in registry.versions()]}
+
+
+_patch_lock = threading.Lock()
+_patch_status: dict = {"running": False, "last": None}
+
+
+@app.post("/api/admin/patch-day")
+def trigger_patch_day(include_mock: bool = False,
+                      x_admin_token: str | None = Header(default=None)) -> dict:
+    """Run a patch day in the background (for a live demo). Token-guarded."""
+    if x_admin_token != config.ADMIN_TOKEN:
+        raise HTTPException(401, "bad admin token")
+    if not _patch_lock.acquire(blocking=False):
+        raise HTTPException(409, "a patch day is already running")
+
+    def work():
+        from detector import patch_day
+        _patch_status["running"] = True
+        try:
+            _patch_status["last"] = patch_day.run(include_mock=include_mock)
+        except Exception as exc:  # noqa: BLE001 - report it rather than kill the thread silently
+            _patch_status["last"] = {"shipped": False, "reason": f"{type(exc).__name__}: {exc}"}
+        finally:
+            _patch_status["running"] = False
+            _patch_lock.release()
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"started": True}
+
+
+@app.get("/api/admin/patch-day")
+def patch_day_status() -> dict:
+    return _patch_status

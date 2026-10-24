@@ -14,6 +14,7 @@
     "fakes": "node scripts/tasks.mjs fakes",
     "train-stub": "node scripts/tasks.mjs train-stub",
     "train-v0": "node scripts/tasks.mjs train-v0",
+    "patch-day": "node scripts/tasks.mjs patch-day",
     "bounties": "node scripts/tasks.mjs bounties",
     "test": "node scripts/tasks.mjs test",
     "build": "node scripts/tasks.mjs build"

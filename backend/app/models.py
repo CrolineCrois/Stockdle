@@ -140,6 +140,7 @@ class Attempt(Base):
 
     # Set by a later patch day once a newer detector catches this exploit.
     patched_in: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    patch_notified: Mapped[bool] = mapped_column(Boolean, default=False)
 
     @property
     def changed_words(self) -> list[dict]:

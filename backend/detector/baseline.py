@@ -78,9 +78,8 @@ class BaselineDetector:
 
     def save(self, directory: Path) -> Path:
         directory.mkdir(parents=True, exist_ok=True)
-        path = directory / "model.joblib"
-        joblib.dump(self.pipeline, path)
-        return path
+        joblib.dump(self.pipeline, directory / "model.joblib")
+        return directory
 
     @classmethod
     def load(cls, name: str, directory: Path) -> "BaselineDetector":
