@@ -46,7 +46,7 @@ def main() -> None:
         heads = list(db.scalars(select(Headline).where(Headline.active)).all())
         # Prefer LLM-made fakes when they exist; otherwise the rule-made ones.
         gens = set(db.scalars(select(SyntheticFake.generator)).all())
-        generator = "claude" if "claude" in gens else "rules"
+        generator = next((g for g in ("claude", "openai") if g in gens), "rules")
         test_ids = load_split(heads)
         train_h = [h for h in heads if h.id not in test_ids]
         test_h = [h for h in heads if h.id in test_ids]
@@ -57,8 +57,9 @@ def main() -> None:
     det = finetune(NAME, config.DETECTOR_BASE_MODEL, tr_pairs, tr_labels, epochs=args.epochs)
     held_out = metrics(det, te_pairs, te_labels)
     path = det.save(config.DETECTOR_DIR / NAME)
+    llm = {"claude": config.FAKES_MODEL, "openai": config.OPENAI_FAKES_MODEL}.get(generator)
     note = (f"DistilBERT on true headlines vs {generator}-made fakes "
-            f"({'LLM: ' + config.FAKES_MODEL if generator == 'claude' else 'no API key: rule-based'})")
+            f"({'LLM: ' + llm if llm else 'no API key: rule-based'})")
     registry.register(NAME, "distilbert", path, n_train=len(tr_labels),
                       metrics={"synthetic_test": held_out, "fake_generator": generator},
                       note=note, make_current=not args.keep_current)

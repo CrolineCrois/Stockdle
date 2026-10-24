@@ -167,7 +167,7 @@ export default function Lab() {
               onClick={() => setJudge(j)}
               className={`chip ${judge === j ? 'border-accent/60 text-accent' : ''}`}
             >
-              {j === 'all' ? 'Any judge' : 'Claude only'}
+              {j === 'all' ? 'Any judge' : 'LLM judge only'}
             </button>
           ))}
           {data && data.mock_judged_attempts > 0 && (

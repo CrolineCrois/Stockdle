@@ -85,3 +85,11 @@ SUSPICION_RATE_PER_S = _env("SIP_SUSPICION_RATE_PER_S", 8.0)   # live-meter call
 FAKES_MODEL = _env("SIP_FAKES_MODEL", "claude-opus-5-5")
 DETECTOR_BASE_MODEL = _env("SIP_DETECTOR_BASE", "distilbert-base-uncased")
 DETECTOR_MAX_LEN = _env("SIP_DETECTOR_MAX_LEN", 128)
+
+# --- OpenAI as an alternative provider ---------------------------------------
+# Used for the judge and for v0's training fakes when OPENAI_API_KEY is set and
+# no Anthropic key is (or when SIP_JUDGE=openai / SIP_FAKES_PROVIDER=openai).
+# Run `python -m judge.check` to see which models your key can use.
+OPENAI_JUDGE_MODEL = _env("SIP_OPENAI_JUDGE_MODEL", "gpt-4o-mini")
+OPENAI_FAKES_MODEL = _env("SIP_OPENAI_FAKES_MODEL", "gpt-4o")
+FAKES_PROVIDER = _env("SIP_FAKES_PROVIDER", "auto")   # auto | claude | openai | rules

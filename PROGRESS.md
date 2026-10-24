@@ -13,7 +13,7 @@ branches; parked live-forecasting work is on `live-forecast`.
 | 5. Analytics dashboard | ✅ |
 | 6. README: setup, architecture, schema, ethics | ✅ |
 
-**State:** 36 backend tests passing, frontend typechecks clean, every phase played
+**State:** 42 backend tests passing, frontend typechecks clean, every phase played
 through in Chrome. Live detector `v0` (held-out AUC 0.82, ~20 ms per meter call).
 
 ## Decisions where the spec was open
@@ -58,9 +58,16 @@ exploits as patched and re-flags bounties. Dry-run verified on the live DB.
 (`#0b1020`), all-pairs pass. Every chart has a tooltip and a table view; legend
 text in ink, never series colour.
 
+## After phase 6
+
+- **OpenAI as an alternative provider** for the judge and v0's fakes (the team has
+  OpenAI credit). Same prompt and schema as Claude (`judge/prompt.py`); `SIP_JUDGE=auto`
+  prefers Anthropic, then OpenAI, then the mock. `python -m judge.check` verifies a
+  key, lists usable models and judges two sample edits.
+
 ## Not done / needs a key or real players
 
-- The Claude judge and Claude-written fakes have not run against the live API (no
-  key in this environment). Set `ANTHROPIC_API_KEY`, then `npm run fakes && npm run
-  train-v0`, and play a round to confirm.
+- No LLM judge or LLM-written fakes have run against a live API (no key in this
+  environment; unit tests stub the calls). Set a key in `.env`, run
+  `python -m judge.check`, then `npm run fakes && npm run train-v0`, and play a round.
 - No real patch day has shipped yet: it needs ≥ 5 judge-verified human exploits.

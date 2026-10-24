@@ -1,11 +1,12 @@
 """Generate false variants of true headlines: the v0 detector's training fakes.
 
-    python -m ingest.make_fakes              # Claude if a key is set, else rules
-    python -m ingest.make_fakes --rules      # force the rule-based generator
+    python -m ingest.make_fakes                    # an LLM if a key is set, else rules
+    python -m ingest.make_fakes --provider openai  # force one: claude | openai | rules
+    python -m ingest.make_fakes --rules            # same as --provider rules
     python -m ingest.make_fakes --per 2      # fakes per headline (default 2)
 
-With an API key, Claude makes small factual edits (1-3 words) in batches,
-returned as strict JSON. Every fake is then held to the same rule players are:
+With an API key, an LLM (Claude, or OpenAI) makes small factual edits (1-3
+words) in batches, returned as strict JSON. Every fake is then held to the same rule players are:
 the word-level diff must be 1-3 changes, or it is discarded. Headlines that
 already have fakes from the same generator are skipped, so re-running only
 fills gaps.
@@ -71,10 +72,39 @@ SCHEMA = {
 }
 
 
+def _items(batch: list[Headline]) -> str:
+    return "\n".join(f'{h.id}. "{h.text}"\n   Snippet: {h.snippet[:300]}' for h in batch)
+
+
+def _openai_batch(client, batch: list[Headline], per: int) -> list[dict]:
+    import openai
+
+    try:
+        response = client.chat.completions.create(
+            model=config.OPENAI_FAKES_MODEL,
+            max_completion_tokens=8000,
+            response_format={"type": "json_schema",
+                             "json_schema": {"name": "fakes", "strict": True, "schema": SCHEMA}},
+            messages=[{"role": "user", "content": PROMPT.format(per=per, items=_items(batch))}],
+        )
+    except openai.APIError as exc:
+        print(f"[fakes] batch failed: {type(exc).__name__}: {exc}")
+        return []
+    message = response.choices[0].message
+    if message.refusal:
+        print("[fakes] batch refused; skipping it")
+        return []
+    try:
+        return json.loads(message.content or "")["fakes"]
+    except (json.JSONDecodeError, KeyError) as exc:
+        print(f"[fakes] malformed batch output: {exc}")
+        return []
+
+
 def _claude_batch(client, batch: list[Headline], per: int) -> list[dict]:
     import anthropic
 
-    items = "\n".join(f'{h.id}. "{h.text}"\n   Snippet: {h.snippet[:300]}' for h in batch)
+    items = _items(batch)
     try:
         response = client.beta.messages.create(
             model=config.FAKES_MODEL,
@@ -98,10 +128,20 @@ def _claude_batch(client, batch: list[Headline], per: int) -> list[dict]:
         return []
 
 
-def generate(*, use_rules: bool, per: int = 2, seed: int = 11) -> dict:
+def pick_provider(requested: str) -> str:
+    if requested != "auto":
+        return requested
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "claude"
+    if os.environ.get("OPENAI_API_KEY"):
+        return "openai"
+    return "rules"
+
+
+def generate(*, use_rules: bool = False, provider: str | None = None, per: int = 2,
+             seed: int = 11) -> dict:
     init_db()
-    use_claude = not use_rules and bool(os.environ.get("ANTHROPIC_API_KEY"))
-    generator = "claude" if use_claude else "rules"
+    generator = "rules" if use_rules else pick_provider(provider or config.FAKES_PROVIDER)
     with SessionLocal() as db:
         heads = list(db.scalars(select(Headline).where(Headline.active)).all())
         done = set(db.scalars(select(SyntheticFake.headline_id)
@@ -110,11 +150,15 @@ def generate(*, use_rules: bool, per: int = 2, seed: int = 11) -> dict:
         by_id = {h.id: h for h in heads}
         kept = dropped = 0
 
-        if use_claude:
-            import anthropic
-            client = anthropic.Anthropic(max_retries=3)
+        if generator in ("claude", "openai"):
+            if generator == "claude":
+                import anthropic
+                client, ask, model = anthropic.Anthropic(max_retries=3), _claude_batch, config.FAKES_MODEL
+            else:
+                import openai
+                client, ask, model = openai.OpenAI(max_retries=3), _openai_batch, config.OPENAI_FAKES_MODEL
             for i in range(0, len(todo), BATCH):
-                for item in _claude_batch(client, todo[i:i + BATCH], per):
+                for item in ask(client, todo[i:i + BATCH], per):
                     h = by_id.get(item.get("id"))
                     fake = " ".join(str(item.get("fake", "")).split())
                     n = word_diff(h.text, fake).num_changes if h else 0
@@ -122,7 +166,7 @@ def generate(*, use_rules: bool, per: int = 2, seed: int = 11) -> dict:
                         dropped += 1
                         continue
                     db.add(SyntheticFake(headline_id=h.id, text=fake, edit_type=item["edit_type"],
-                                         generator="claude", model=config.FAKES_MODEL))
+                                         generator=generator, model=model))
                     kept += 1
                 db.commit()
                 print(f"[fakes] {min(i + BATCH, len(todo))}/{len(todo)} headlines")
@@ -141,13 +185,14 @@ def generate(*, use_rules: bool, per: int = 2, seed: int = 11) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--rules", action="store_true", help="use the rule-based generator")
+    ap.add_argument("--provider", choices=["auto", "claude", "openai", "rules"], default=None)
     ap.add_argument("--per", type=int, default=2, help="fakes per headline")
     args = ap.parse_args()
-    summary = generate(use_rules=args.rules, per=args.per)
+    summary = generate(use_rules=args.rules, provider=args.provider, per=args.per)
     print(f"[fakes] {summary}")
-    if summary["generator"] == "rules" and not args.rules:
-        print("[fakes] no ANTHROPIC_API_KEY: used rule-based fakes. Set a key and re-run "
-              "for the LLM-made fakes the v0 baseline is meant to use.")
+    if summary["generator"] == "rules" and not args.rules and args.provider != "rules":
+        print("[fakes] no API key: used rule-based fakes. Set ANTHROPIC_API_KEY or "
+              "OPENAI_API_KEY and re-run for the LLM-made fakes v0 is meant to use.")
 
 
 if __name__ == "__main__":

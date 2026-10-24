@@ -27,22 +27,27 @@ and no GPU**: the stub detector and a rule-based mock judge stand in.
 For the real thing:
 
 ```bash
-cp .env.example .env              # then put your ANTHROPIC_API_KEY in it
+cp .env.example .env              # then set ANTHROPIC_API_KEY *or* OPENAI_API_KEY
+cd backend && .venv/bin/python -m judge.check && cd ..   # verify the key and model
 npm run setup:ml                  # torch + transformers (~1 GB), training fakes, DistilBERT v0
 npm run scrape                    # fresh headlines from the RSS feeds
 ```
 
-With a key, the judge is Claude Sonnet 5.5 and v0's training fakes are written by
-Claude Opus 5.5. Without one, v0 trains on rule-made fakes and the version note
-says so — re-run `npm run fakes && npm run train-v0` once you have a key.
+The judge and v0's fake-writer use whichever key you set (Anthropic wins if both
+are): **Claude** (Sonnet 5.5 judge, Opus 5.5 fakes) or **OpenAI** (`gpt-4o-mini`
+judge, `gpt-4o` fakes by default — `judge.check` lists the models your key can use;
+override with `SIP_OPENAI_JUDGE_MODEL` / `SIP_OPENAI_FAKES_MODEL`). Both get the
+identical prompt and must answer in the identical JSON schema. Without any key,
+v0 trains on rule-made fakes and the version note says so — re-run
+`npm run fakes && npm run train-v0` once you have one.
 
 **Requirements:** Node 18+, Python 3.11–3.13 (setup picks one automatically;
 3.14 is too new for some pinned wheels). Apple-silicon or CUDA GPUs speed up
 training but aren't needed: v0 trains in about a minute on a laptop.
 
-**API cost:** the API is pay-as-you-go, separate from any Claude.ai plan. A judge
-call is ~1–2¢, so ~1,000 submissions is $10–20; generating v0's fakes is a few
-dollars. Hackathons often hand out credits.
+**API cost:** pay-as-you-go on either provider. A judge call is a short
+classification (well under 1¢ on a small model), so even thousands of submissions
+cost a few dollars; generating v0's fakes is a one-off of similar size.
 
 ### Commands
 
@@ -56,7 +61,7 @@ dollars. Hackathons often hand out credits.
 | `npm run train-v0` | Train detector v0 |
 | `npm run patch-day` | Retrain on human exploits → next version (`-- --dry-run` to only evaluate) |
 | `npm run bounties` | Re-flag bounty headlines against the live detector |
-| `npm test` | Backend tests (36) |
+| `npm test` | Backend tests (42) |
 
 **On stage:** `POST /api/admin/patch-day` with header `x-admin-token` (default
 `sneak-demo`, set `SIP_ADMIN_TOKEN`) runs a patch day in the background; the
@@ -117,7 +122,7 @@ flowchart LR
   M --> D[Detector<br/>DistilBERT vN<br/>headline + snippet]
   P -->|submit| G
   G --> D
-  G --> J[Judge<br/>Claude Sonnet 5.5<br/>or mock]
+  G --> J[Judge<br/>Claude or OpenAI<br/>or mock]
   G --> N[novelty.py<br/>MiniLM embeddings]
   G --> A[(attempts<br/>every submission)]
   A -->|judge-verified exploits| PD[patch_day.py]
@@ -139,7 +144,8 @@ backend/
     novelty.py      zero-day detection
     analytics.py    everything on /lab
     models.py       SQLite schema (below); db.py adds missing columns on startup
-  judge/            claude_judge.py (structured JSON, refusal fallback), mock_judge.py
+  judge/            prompt.py (shared instructions + schema), claude_judge.py, openai_judge.py,
+                    mock_judge.py, check.py (verify your key/model)
   detector/
     baseline.py     phase-1 stub: logistic regression on headline-vs-snippet features
     distil.py       DistilBERT sentence-pair classifier + shared fine-tuning loop
@@ -149,7 +155,7 @@ backend/
     registry.py     loads versions, tracks which is live, rechecks every 5 s
     bounties.py
   ingest/           scrape_rss.py, seed.py, make_fakes.py (LLM fakes), perturb.py (rule fakes)
-  tests/            36 tests, throwaway DB + mock judge, no model download
+  tests/            42 tests, throwaway DB + mock judge, no model download or API calls
 frontend/
   app/              / (start + research notice), /play, /board, /lab
   components/       HeadlineEditor, SuspicionMeter, TimerBar, OutcomeCard, ShareCard, …
@@ -207,7 +213,7 @@ forget?). That is the `/lab` headline chart.
 | `headline_id`, `original_headline`, `edited_headline` | the edit |
 | `changed_words_json`, `num_words_changed` | the word-level diff |
 | `suspicion_score_final`, `suspicion_trace_json` | final score and every meter reading while typing, with ms timestamps and the text at that moment |
-| `judge_output_json`, `edit_type` | the judge's full verdict, incl. which judge (`claude` / `mock`) and model |
+| `judge_output_json`, `edit_type` | the judge's full verdict, incl. which judge (`claude` / `openai` / `mock`) and model |
 | `outcome` | `snuck` / `caught` / `invalid` / `timeout` |
 | `points`, `streak`, `lives_left` | game state after this attempt |
 | `detector_version`, `is_bounty` | what it was played against |
@@ -250,8 +256,11 @@ This game asks people to write misinformation, so the handling is part of the de
 
 - **No API key yet → mock judge and rule-made fakes.** The game, logging, patch
   days and dashboard all work, but the judge's verdicts and v0's training data are
-  stand-ins until a key is set. The judge integration hasn't been exercised against
-  the live API yet.
+  stand-ins until a key is set. Neither LLM judge has been exercised against its live
+  API yet (unit tests stub the calls) — run `python -m judge.check` first.
+- **The spec asked for the Anthropic API.** OpenAI is supported as a drop-in
+  alternative for the judge and fakes; verdicts record which provider and model
+  ruled, so results from the two shouldn't be mixed without saying so.
 - **Small data.** ~115 seed headlines; v0 trains on ~250 pairs. Scrape regularly
   before an event. A patch day needs ≥ 5 judge-verified exploits, and the headline
   chart needs held-out exploits (≈ 1 in 5) before it shows anything.
