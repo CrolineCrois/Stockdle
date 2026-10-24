@@ -2,7 +2,7 @@
 
 /**
  * Post-reveal panel: the legend, an animated score counter, bonus chips that
- * land one at a time, the reveal facts, and the fake-headline banner.
+ * land one at a time, and the reveal facts.
  */
 
 import { AnimatePresence, motion } from 'framer-motion';
@@ -132,24 +132,6 @@ export default function ScorePanel({
       className="panel space-y-4 p-4 sm:p-5"
     >
       <Legend hasCrowd={Boolean(result.crowd_curve)} />
-
-      {result.is_fake && (
-        <div className="rounded-xl border border-danger/50 bg-danger/10 p-3.5">
-          <p className="text-sm font-bold text-danger">
-            ⚠ That headline was FAKE. Here&apos;s what really happened.
-          </p>
-          <p className="mt-1 text-sm text-chalk-dim">
-            It was fabricated for this game and never published anywhere. The green
-            line is the real price for{' '}
-            <span className="font-semibold text-chalk">
-              {result.reveal_info.ticker ?? 'this stock'}
-            </span>{' '}
-            over the same window — it barely reacted, because there was nothing to
-            react to. If your line jumped, that is exactly the reflex fake market
-            news is built to trigger.
-          </p>
-        </div>
-      )}
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>

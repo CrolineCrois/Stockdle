@@ -33,7 +33,7 @@ import {
   type NextRound,
   type SubmitResult,
 } from '@/lib/api';
-import { readPlayer } from '@/lib/player';
+import { readPlayer, signIn, type StoredPlayer } from '@/lib/player';
 import { sound } from '@/lib/sound';
 
 const IDLE_SKIP_MS = 30_000;
@@ -56,7 +56,8 @@ export default function PlayClient() {
   const idleRef = useRef<number | null>(null);
   const aiVersionRef = useRef(0);
 
-  const [player, setPlayer] = useState(() => readPlayer());
+  // Set only once the backend has confirmed (or recreated) the stored player.
+  const [player, setPlayer] = useState<StoredPlayer | null>(null);
   const [phase, setPhase] = useState<Phase>('loading');
   const [meta, setMeta] = useState<NextRound | null>(null);
   const [round, setRound] = useState<GameRound | null>(null);
@@ -84,7 +85,11 @@ export default function PlayClient() {
       router.replace('/');
       return;
     }
-    setPlayer(stored);
+    // Re-register on every visit: `reset-demo` wipes the players table, and a
+    // stale id in localStorage would otherwise dead-end on "Unknown player".
+    signIn(stored.name)
+      .then((info) => setPlayer({ player_id: info.player_id, name: info.name }))
+      .catch(() => setPlayer(stored));
   }, [router]);
 
   // --- round loading ----------------------------------------------------
@@ -128,10 +133,13 @@ export default function PlayClient() {
 
   useEffect(() => {
     if (!player) return;
+    // A mode switch (Daily → Endless) is a same-route navigation, so this
+    // component stays mounted; drop any round preloaded for the old mode.
+    preloadRef.current = null;
     void loadRound(player.player_id);
-    // Only on mount / player change — later rounds come from `next()`.
+    // Only on mount / player or mode change — later rounds come from `next()`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [player?.player_id]);
+  }, [player?.player_id, mode]);
 
   // --- daily summary ----------------------------------------------------
   useEffect(() => {
@@ -299,9 +307,11 @@ export default function PlayClient() {
         right={
           <>
             <span className="chip">
-              {mode === 'daily' && meta?.of
-                ? `Daily #${meta.daily_number ?? ''} · ${Math.min(meta.index, meta.of)}/${meta.of}`
-                : 'Endless'}
+              {mode === 'endless'
+                ? 'Endless'
+                : meta?.of
+                  ? `Daily #${meta.daily_number ?? ''} · ${Math.min(meta.index, meta.of)}/${meta.of}`
+                  : 'Daily'}
             </span>
             <AnimatePresence>
               {streak > 0 && (

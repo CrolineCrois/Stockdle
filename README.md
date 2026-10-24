@@ -7,14 +7,13 @@ happened next. Then the truth traces in over your line, two ghost lines fade up
 — what the crowd drew, and what the AI predicted — and you find out whether you
 beat either of them. Your drawing then becomes part of what the AI learns from.
 
-Four kinds of round, all from real-world series:
+Three kinds of round, all from real-world series:
 
 | Round | What you are predicting | Your clue |
 |---|---|---|
 | **Grid demand** | The next 50 hours of electricity load for a US balancing authority | Region and the temperature forecast |
 | **Mystery stock** | The next 50 bars after a real headline dropped | The headline. Ticker and date stay hidden until the reveal |
 | **Search trends** | The next 26 weeks of Google search interest | The search term |
-| **Fakes** | The same thing — except the headline never happened | A headline that was fabricated for this game |
 
 ---
 
@@ -58,7 +57,7 @@ Node 18+ and Python 3.11+ (developed on 3.13). Nothing else.
 | `npm run plot` | Renders `data/rounds/round_preview.png` to eyeball the rounds |
 | `npm run seed-demo` | Adds the simulated demo cohort |
 | `npm run reset-demo` | Wipes all play data, then re-seeds it |
-| `npm test` | Backend test suite (60 tests) |
+| `npm test` | Backend test suite (63 tests) |
 
 ---
 
@@ -75,7 +74,6 @@ UI marks them with a `seed data` chip.
 | Temperature | [Open-Meteo archive](https://open-meteo.com/) | none | Hourly, joined to the demand series |
 | Stock prices + headlines | `yfinance` | none | 5-minute bars; each headline aligned to the bar at its publish time |
 | Search interest | `pytrends` | none | Weekly, 5 years, **one term per request** (see below) |
-| Fake headlines | Claude API | `ANTHROPIC_API_KEY` | Falls back to ~20 bundled templates |
 
 Two things worth knowing if you re-run the pipeline:
 
@@ -88,6 +86,13 @@ Two things worth knowing if you re-run the pipeline:
   onto the canvas' 75/50 points) while hourly and minute sources use 75 → 50
   directly. A 125-week window fits into 260 weeks barely twice, leaving nothing
   to train on.
+
+All source timestamps are stored in UTC, but everything a player reads is on
+the local clock: grid rounds use the balancing authority's time zone (ERCOT
+Central, PJM Eastern, CAISO Pacific) and stock rounds use Eastern market time.
+Each round carries an `x_axis` block (tick labels, night bands for grid rounds,
+the time at the cut) so the canvas can label the time axis — demand depends
+heavily on time of day, and a minute index alone is hard to reason about.
 
 Round counts adapt to whatever the sources served: the builder measures how many
 non-overlapping windows each source can supply and allocates a ~200-round
@@ -108,19 +113,14 @@ harmonics for trends) to the 50 hidden points. It is fit on *historical windows*
 and never sees a game round: the builder asserts at build time that no training
 window shares a single source index with any playable round.
 
-Held-out error on the 195 game rounds it has never seen, against a persistence
-baseline (a flat line):
+Held-out error on the 179 game rounds it has never seen (offline build),
+against a persistence baseline (a flat line):
 
 | Round type | Model RMSE | Persistence | Skill |
 |---|---|---|---|
-| Grid demand | 0.124 | 0.319 | **+61%** |
-| Real headline | 0.174 | 0.308 | **+44%** |
-| Search trends | 0.188 | 0.233 | **+19%** |
-| Fake headline | 0.169 | 0.208 | **+19%** |
-
-Fake rounds score lowest on purpose: they are cut from quiet stretches with no
-real news, so there is genuinely less to predict — and the model, which is not
-told which headlines are fabricated, has no edge there either.
+| Grid demand | 0.099 | 0.316 | **+69%** |
+| Stock headline | 0.174 | 0.307 | **+43%** |
+| Search trends | 0.147 | 0.301 | **+51%** |
 
 **2. Crowd forecast** — a running pointwise mean of every drawing submitted on a
 round. A round needs 3 drawings before its crowd line is used at all.
@@ -134,8 +134,8 @@ held-out split of rounds. The client picks that up and toasts
 *"⚡ TAPE AI v7 deployed — learned from 25 new drawings."*
 
 The weights it learns are themselves the interesting result. From the demo
-cohort: `electricity w=0.95` (people cannot read load curves — trust the model),
-`trends w=0.40` (people are good at seasons — trust the crowd). And the blend
+cohort: `electricity w=0.90` (people cannot read load curves — trust the model),
+`stock w=0.45` and `trends w=0.60` (the crowd earns a real share). And the blend
 beats both of its inputs, which is the dashboard's headline chart.
 
 ### Scoring
@@ -159,28 +159,10 @@ the crowd +20. Base ≥ 95 is a bullseye; base ≥ 75 extends a streak, worth
 
 ## Responsible design
 
-The fake-headline rounds exist to teach people to notice a market story that
-has no market behind it. That only works if the game is straight with them:
-
-- **Fabricated headlines are always labelled.** They carry an
-  `⚠ unverified claim` chip and a dashed quarantine frame *before* you draw, not
-  only after. Nobody is tricked without warning.
-- **Every fake round ends with an explicit correction** naming the headline as
-  fabricated and showing what the price actually did.
-- **Fake headline text never leaves a round that labels it.** Share strings carry
-  scores only, and `export_safe()` / `strip_fake_text()` replace fabricated text
-  with `[fabricated headline withheld]` on any export path. A fake headline
-  should never be quotable out of context.
-- **Fakes are the smallest slice of the catalogue** (20% target), so they land as
-  a twist rather than as the whole game.
-- **No fake names a real person, company officer, regulator or publication** —
-  the templates refer to the company only by placeholder, and the LLM prompt
-  forbids naming real entities.
 - **Simulated demo players are labelled `sim`** on the leaderboard. Seeded play
   should not be mistaken for a real crowd.
-- **The forecaster is not told which headlines are fake.** Giving it that flag
-  would let it win disinformation rounds for the wrong reason and would make the
-  dashboard's "did the AI fall for it too?" comparison meaningless.
+- **Share strings carry scores only** — no headline, ticker or round id — so a
+  result can be posted without spoiling or quoting anything.
 
 Identity is a display name in `localStorage` plus a row in `players`. No email,
 no password, no tracking.
@@ -196,7 +178,6 @@ backend/
     electricity.py   EIA v2 + Open-Meteo
     stocks.py        yfinance prices and headlines
     trends.py        pytrends search interest
-    fake_headlines.py  fabricated headlines (Claude API or templates)
     build_rounds.py  cuts series into rounds + disjoint training windows
     plot_rounds.py   PNG sanity check
   model/
@@ -266,7 +247,10 @@ a unique constraint, and a sliding-window rate limit per player.
   curves with a temperature-driven evening peak, jump-diffusion prices,
   wrapped-Gaussian search seasons) but it is not history. Rounds built from it
   are chipped `seed data`. Run `npm run pipeline` with a network and an
-  `EIA_API_KEY` for the real thing.
+  `EIA_API_KEY` for the real thing. In particular, **seed headlines are
+  invented templates attached to real tickers** — "Microsoft announces $10B
+  buyback expansion" over a synthetic price path did not happen. Live stock
+  rounds use real yfinance headlines.
 - **yfinance is frequently rate-limited** by Yahoo. When it is, stock rounds come
   from the seed archive. There is no fix for this on our side beyond the cache.
 - **Live Trends gives 14 rounds, not 50.** Five years of weekly data per term

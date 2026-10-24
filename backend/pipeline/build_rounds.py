@@ -24,6 +24,7 @@ import argparse
 import hashlib
 from datetime import datetime
 from typing import Iterable
+from zoneinfo import ZoneInfo
 
 import numpy as np
 
@@ -38,7 +39,6 @@ from .common import (
     make_scale,
     write_json,
 )
-from .fake_headlines import get_fake_templates
 
 # Target catalogue size. The per-type split is *not* fixed: it is allocated
 # from how many non-overlapping windows each source can actually supply, so a
@@ -47,11 +47,10 @@ from .fake_headlines import get_fake_templates
 # 125-step window per term, while the seed archive carries 14 years.
 TARGET_ROUNDS = 200
 MIN_PER_TYPE = 12                 # every type must still show up in the mix
-# The catalogue the game advertises. Fake rounds are the smallest slice on
-# purpose: they are a twist, and stop landing as one if every other round is one.
-DESIRED_MIX = {"electricity": 0.30, "stock": 0.26, "trends": 0.24, "fake_stock": 0.20}
+# The catalogue the game advertises.
+DESIRED_MIX = {"electricity": 0.36, "stock": 0.32, "trends": 0.32}
 MIX_STRETCH = 1.6                 # a type may absorb at most 1.6x its share
-GAME_QUOTA = {"electricity": 60, "stock": 50, "trends": 50, "fake_stock": 50}
+GAME_QUOTA = {"electricity": 70, "stock": 65, "trends": 65}
 # Dense stride for training windows, per source. Training windows may overlap
 # each other (that is normal for sliding-window forecasting) but never a round.
 TRAIN_STRIDE = {"electricity": 4, "stock": 23, "trends": 2}
@@ -69,7 +68,6 @@ TRAIN_CAP = 2600                  # per source, keeps `train.py` snappy
 REAL_GEOMETRY = {
     "electricity": (VISIBLE_LEN, HIDDEN_LEN),
     "stock": (VISIBLE_LEN, HIDDEN_LEN),
-    "fake_stock": (VISIBLE_LEN, HIDDEN_LEN),
     "trends": (60, 26),
 }
 
@@ -98,9 +96,102 @@ GAME_REGION_START = {"electricity": 0.25, "trends": 0.55}
 TRENDS_PICK_STRIDE = 2
 TRENDS_MIN_ACTION = 0.25
 
-QUIET_GUARD = 180                 # steps a fake round must keep clear of real news
 
 DOW = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+# Source timestamps are UTC; everything a player reads is on the local clock.
+MARKET_TZ = "America/New_York"
+GRID_TZ = {"ERCOT": "America/Chicago", "PJM": "America/New_York",
+           "CAISO": "America/Los_Angeles"}
+NIGHT_HOURS = (20, 6)             # grid rounds shade 8pm-6am local
+
+
+def series_tz(series: dict) -> ZoneInfo:
+    meta = series.get("meta", {})
+    if meta.get("tz"):
+        return ZoneInfo(meta["tz"])
+    if series.get("source") == "electricity":
+        return ZoneInfo(GRID_TZ.get(meta.get("region", series["key"]), "UTC"))
+    if series.get("source") == "stock":
+        return ZoneInfo(MARKET_TZ)
+    return ZoneInfo("UTC")
+
+
+def local_stamp(series: dict, idx: int) -> datetime:
+    return datetime.fromisoformat(series["t"][idx]).astimezone(series_tz(series))
+
+
+def _clock(t: datetime) -> str:
+    """'9:30', '2pm' style -- short enough for a crowded axis."""
+    h = t.hour % 12 or 12
+    if t.minute:
+        return f"{h}:{t.minute:02d}"
+    return {0: "midnight", 12: "noon"}.get(t.hour, f"{h}{'am' if t.hour < 12 else 'pm'}")
+
+
+def _x_axis(kind: str, series: dict, cut: int) -> dict:
+    """Time ticks for the canvas, in canvas indices (0..WINDOW_LEN-1).
+
+    Each canvas point is mapped back to the source step it was resampled from,
+    so ticks land where that time actually is even for resampled geometries.
+    A tick is placed at the first canvas point past each boundary (every 30
+    minutes for stocks, every 6 hours for grid, every month for trends).
+    ``major`` ticks (a new day / a new year) are always drawn; the client thins
+    the rest to fit the width.
+    """
+    vis_n, hid_n, _ = geom(kind)
+    start = cut - vis_n + 1
+    raw = [start + round(i * (vis_n - 1) / (VISIBLE_LEN - 1)) for i in range(VISIBLE_LEN)]
+    raw += [cut + 1 + round(j * (hid_n - 1) / (HIDDEN_LEN - 1)) for j in range(HIDDEN_LEN)]
+    times = [local_stamp(series, k) for k in raw]
+
+    if kind == "trends":
+        bucket = lambda t: (t.year, t.month)
+    elif kind == "electricity":
+        bucket = lambda t: (t.date(), t.hour // 6)
+    else:
+        bucket = lambda t: (t.date(), t.hour, t.minute // 30)
+
+    ticks = []
+    for i in range(1, len(times)):
+        prev, t = times[i - 1], times[i]
+        if bucket(prev) == bucket(t):
+            continue
+        if kind == "trends":
+            major = t.month == 1
+            label = t.strftime("%b '%y") if major else t.strftime("%b")
+        elif kind == "electricity":
+            major = t.date() != prev.date()
+            label = DOW[t.weekday()][:3] if major else _clock(t.replace(minute=0))
+        else:
+            major = t.date() != prev.date()
+            label = (f"{DOW[t.weekday()][:3]} {_clock(t)}" if major
+                     else _clock(t.replace(minute=(t.minute // 30) * 30)))
+        ticks.append({"i": i, "label": label, "major": major})
+
+    bands = []
+    if kind == "electricity":
+        lo, hi = NIGHT_HOURS
+        run = None
+        for i, t in enumerate(times):
+            night = t.hour >= lo or t.hour < hi
+            if night and run is None:
+                run = i
+            elif not night and run is not None:
+                bands.append([run, i - 1])
+                run = None
+        if run is not None:
+            bands.append([run, len(times) - 1])
+
+    now = times[VISIBLE_LEN - 1]
+    if kind == "trends":
+        now_label = f"{now:%b} {now.day}, {now.year}"
+    elif kind == "electricity":
+        now_label = f"{DOW[now.weekday()][:3]} {_clock(now)}"
+    else:
+        now_label = f"{now.hour % 12 or 12}:{now.minute:02d}{'am' if now.hour < 12 else 'pm'} ET"
+    return {"ticks": ticks, "bands": bands, "now": now_label,
+            "note": "night (8pm-6am local)" if bands else None}
 
 
 # --- window helpers -------------------------------------------------------
@@ -130,7 +221,7 @@ class IndexReservation:
 
 # --- context builders -----------------------------------------------------
 def _electricity_context(series: dict, cut: int, window_temps: list[float]):
-    stamp = datetime.fromisoformat(series["t"][cut])
+    stamp = local_stamp(series, cut)
     forecast_high = max(window_temps[VISIBLE_LEN:]) if window_temps else None
     temp_now = window_temps[VISIBLE_LEN - 1] if window_temps else None
     bits = [f"Region: {series['meta'].get('region', series['key'])}"]
@@ -141,8 +232,8 @@ def _electricity_context(series: dict, cut: int, window_temps: list[float]):
         "kind": "electricity",
         "eyebrow": "Grid demand",
         "title": " · ".join(bits),
-        "subtitle": f"{series['meta'].get('city', '')} · cut at "
-                    f"{stamp.strftime('%H:%M')} · next 50 hours hidden",
+        "subtitle": f"{series['meta'].get('city', '')} · now {_clock(stamp)} local · "
+                    "next 50 hours hidden",
         "chips": [series["meta"].get("region", series["key"]),
                   f"{temp_now:.0f}°F now" if temp_now is not None else "no temp data"],
     }
@@ -165,15 +256,14 @@ def _electricity_context(series: dict, cut: int, window_temps: list[float]):
 
 
 def _stock_context(series: dict, cut: int, headline: str | None, *,
-                   is_fake: bool, publisher: str | None, age_steps: int):
-    stamp = datetime.fromisoformat(series["t"][cut])
+                   publisher: str | None, age_steps: int):
+    stamp = local_stamp(series, cut)
     context = {
-        "kind": "fake_stock" if is_fake else "stock",
+        "kind": "stock",
         "eyebrow": "Mystery stock",
         "title": headline or "No news — just the tape",
         "subtitle": "Ticker and date revealed after you draw",
         "headline": headline,
-        "is_fake": is_fake,
         "publisher": publisher,
         "chips": ["Mystery stock", f"{series['freq']} bars"],
     }
@@ -183,10 +273,9 @@ def _stock_context(series: dict, cut: int, headline: str | None, *,
         "date": stamp.date().isoformat(),
         "cut_at": stamp.isoformat(),
         "headline": headline,
-        "is_fake": is_fake,
         "publisher": publisher,
     }
-    feat = {"headline": headline or "", "is_fake": is_fake, "age_steps": age_steps,
+    feat = {"headline": headline or "", "age_steps": age_steps,
             "hour": stamp.hour, "dow": stamp.weekday()}
     return context, reveal, feat
 
@@ -210,7 +299,7 @@ def _trends_context(series: dict, cut: int):
 
 # --- per-source cutters ---------------------------------------------------
 def _make_record(kind: str, series: dict, cut: int, *, context, reveal, feat,
-                 is_fake: bool, is_game: bool) -> dict | None:
+                 is_game: bool) -> dict | None:
     """Build one round/window with its cut *after* index ``cut``."""
     vis_n, hid_n, _ = geom(kind)
     start = cut - vis_n + 1
@@ -232,14 +321,15 @@ def _make_record(kind: str, series: dict, cut: int, *, context, reveal, feat,
         "hidden": [round(v, 6) for v in hidden],
         "context": context,
         "reveal_info": reveal,
-        "is_fake": is_fake,
         "is_seed": bool(series.get("is_seed")),
         "scale": scale.as_dict(),
         "x_label": series.get("x_label", "Step"),
         "feat": feat,
         "span": [start, end],
     }
-    if not is_game:
+    if is_game:
+        rec["x_axis"] = _x_axis(kind, series, cut)
+    else:
         rec.pop("context")
         rec.pop("reveal_info")
     return rec
@@ -265,7 +355,7 @@ def cut_electricity(series_list: list[dict], res: IndexReservation, rng,
             win_temps = temps[cut - vis_n + 1: cut + 1 + hid_n]
             ctx, rev, feat = _electricity_context(s, cut, win_temps)
             rec = _make_record("electricity", s, cut, context=ctx, reveal=rev,
-                               feat=feat, is_fake=False, is_game=True)
+                               feat=feat, is_game=True)
             if rec:
                 games.append(rec)
                 res.reserve(s["key"], rec["span"][0], rec["span"][1])
@@ -278,18 +368,16 @@ def cut_electricity(series_list: list[dict], res: IndexReservation, rng,
             win_temps = temps[start:end]
             _, _, feat = _electricity_context(s, cut, win_temps)
             rec = _make_record("electricity", s, cut, context=None, reveal=None,
-                               feat=feat, is_fake=False, is_game=False)
+                               feat=feat, is_game=False)
             if rec:
                 trains.append(rec)
     return games, trains
 
 
 def cut_stocks(series_list: list[dict], res: IndexReservation, rng,
-               quota: int | None = None, fake_quota: int | None = None):
-    games, fakes, trains = [], [], []
+               quota: int | None = None):
+    games, trains = [], []
     quota = GAME_QUOTA["stock"] if quota is None else quota
-    fake_quota = GAME_QUOTA["fake_stock"] if fake_quota is None else fake_quota
-    fake_pool = get_fake_templates()
 
     # 1. Real-headline rounds: cut exactly at the publish bar.
     candidates = []
@@ -302,43 +390,15 @@ def cut_stocks(series_list: list[dict], res: IndexReservation, rng,
             candidates.append((s, ev, cut))
     rng.shuffle(candidates)
     for s, ev, cut in candidates[:quota]:
-        ctx, rev, feat = _stock_context(s, cut, ev["title"], is_fake=False,
+        ctx, rev, feat = _stock_context(s, cut, ev["title"],
                                         publisher=ev.get("publisher"), age_steps=0)
         rec = _make_record("stock", s, cut, context=ctx, reveal=rev, feat=feat,
-                           is_fake=False, is_game=True)
+                           is_game=True)
         if rec:
             games.append(rec)
             res.reserve(s["key"], rec["span"][0], rec["span"][1])
 
-    # 2. Fake-headline rounds: cut somewhere quiet, so the truth is a non-reaction.
-    per_series = max(1, fake_quota // max(1, len(series_list)))
-    for s in series_list:
-        n = len(s["y"])
-        ev_idx = [int(e["idx"]) for e in s.get("events", [])]
-        placed = 0
-        starts = list(range(vis_n - 1, n - hid_n - 1, win))
-        rng.shuffle(starts)
-        for cut in starts:
-            if placed >= per_series:
-                break
-            start, end = cut - vis_n + 1, cut + 1 + hid_n
-            if not res.free(s["key"], start, end):
-                continue
-            if any(abs(cut - e) < QUIET_GUARD for e in ev_idx):
-                continue
-            headline = fake_pool[int(rng.integers(len(fake_pool)))].format(
-                name=s["meta"].get("name", s["key"]), ticker=s["key"])
-            ctx, rev, feat = _stock_context(s, cut, headline, is_fake=True,
-                                            publisher="Fabricated for this game",
-                                            age_steps=0)
-            rec = _make_record("fake_stock", s, cut, context=ctx, reveal=rev,
-                               feat=feat, is_fake=True, is_game=True)
-            if rec:
-                fakes.append(rec)
-                res.reserve(s["key"], rec["span"][0], rec["span"][1])
-                placed += 1
-
-    # 3. Training windows: dense, with the most recent real headline as context.
+    # 2. Training windows: dense, with the most recent real headline as context.
     stride = TRAIN_STRIDE["stock"]
     for s in series_list:
         n = len(s["y"])
@@ -352,13 +412,13 @@ def cut_stocks(series_list: list[dict], res: IndexReservation, rng,
             for idx, ev in ev_sorted:
                 if idx <= cut and cut - idx < 240:
                     headline, age = ev["title"], cut - idx
-            _, _, feat = _stock_context(s, cut, headline or None, is_fake=False,
+            _, _, feat = _stock_context(s, cut, headline or None,
                                         publisher=None, age_steps=age)
             rec = _make_record("stock", s, cut, context=None, reveal=None,
-                               feat=feat, is_fake=False, is_game=False)
+                               feat=feat, is_game=False)
             if rec:
                 trains.append(rec)
-    return games, fakes, trains
+    return games, trains
 
 
 def cut_trends(series_list: list[dict], res: IndexReservation, rng,
@@ -401,7 +461,7 @@ def cut_trends(series_list: list[dict], res: IndexReservation, rng,
             ctx, rev, feat = _trends_context(s, cut)
             ctx = {**ctx, "chips": [*ctx["chips"], f"{score:.0%} of the action ahead"]}
             rec = _make_record("trends", s, cut, context=ctx, reveal=rev,
-                               feat=feat, is_fake=False, is_game=True)
+                               feat=feat, is_game=True)
             if rec:
                 games.append(rec)
                 taken.append((start, end))
@@ -413,7 +473,7 @@ def cut_trends(series_list: list[dict], res: IndexReservation, rng,
                 continue
             _, _, feat = _trends_context(s, cut)
             rec = _make_record("trends", s, cut, context=None, reveal=None,
-                               feat=feat, is_fake=False, is_game=False)
+                               feat=feat, is_game=False)
             if rec:
                 trains.append(rec)
     return games, trains
@@ -445,9 +505,6 @@ def capacities(elec: list[dict], stk: list[dict], trd: list[dict]) -> dict[str, 
         "electricity": _block_capacity(elec, "electricity",
                                        GAME_REGION_START["electricity"]),
         "stock": usable_events,
-        # Fake rounds need quiet blocks, and compete with real-headline rounds
-        # for the same series, so budget conservatively.
-        "fake_stock": max(0, _block_capacity(stk, "stock") - usable_events),
         "trends": _block_capacity(trd, "trends", GAME_REGION_START["trends"]),
     }
 
@@ -461,9 +518,7 @@ def allocate(caps: dict[str, int], target: int = TARGET_ROUNDS) -> dict[str, int
     * **the intended mix** (``DESIRED_MIX``) — the catalogue should feel like
       the game it advertises, not like whichever source happened to be biggest;
     * **a ceiling** of ``MIX_STRETCH`` x the intended share, so redistributing a
-      thin source's shortfall cannot let one type swamp the catalogue. Fake
-      rounds have effectively unlimited capacity (any quiet window will do), so
-      without this they would take everything going.
+      thin source's shortfall cannot let one type swamp the catalogue.
 
     Shortfall is redistributed by intended share, among types that still have
     both capacity and headroom.
@@ -529,11 +584,10 @@ def build(use_live: bool = True, seed: int = 7) -> dict:
     log(f"capacity {caps} -> quota {quota}")
 
     e_games, e_train = cut_electricity(elec, res, rng, quota["electricity"])
-    s_games, f_games, s_train = cut_stocks(stk, res, rng, quota["stock"],
-                                           quota["fake_stock"])
+    s_games, s_train = cut_stocks(stk, res, rng, quota["stock"])
     t_games, t_train = cut_trends(trd, res, rng, quota["trends"])
 
-    rounds = e_games + s_games + f_games + t_games
+    rounds = e_games + s_games + t_games
     rng.shuffle(rounds)
     training = (_cap(e_train, TRAIN_CAP, rng) + _cap(s_train, TRAIN_CAP, rng)
                 + _cap(t_train, TRAIN_CAP, rng))
@@ -573,22 +627,6 @@ def build(use_live: bool = True, seed: int = 7) -> dict:
     log(f"built {len(rounds)} rounds {by_type}")
     log(f"built {len(training)} training windows {train_by_type}")
     return summary
-
-
-def export_safe(round_rec: dict) -> dict:
-    """A round stripped of anything that must not leave the app.
-
-    Drops ``hidden`` (the answer) and replaces fabricated headline text with a
-    neutral label, so exports can never carry a fake headline as plain text.
-    """
-    out = {k: v for k, v in round_rec.items() if k not in ("hidden", "feat", "span")}
-    if round_rec.get("is_fake"):
-        for block in ("context", "reveal_info"):
-            if isinstance(out.get(block), dict):
-                out[block] = {**out[block],
-                              "headline": "[fabricated headline withheld]",
-                              "title": "[fabricated headline withheld]"}
-    return out
 
 
 if __name__ == "__main__":

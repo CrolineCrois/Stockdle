@@ -202,7 +202,7 @@ def submit(round_id: str, body: SubmitIn, background: BackgroundTasks,
     anchor = float(payload["visible"][-1])
     drawing = Drawing(
         round_id=round_id, player_id=player.id, curve_json=json.dumps(body.curve),
-        time_ms=body.time_ms, mode=body.mode, round_type=rnd.type, is_fake=rnd.is_fake,
+        time_ms=body.time_ms, mode=body.mode, round_type=rnd.type,
         base_score=breakdown.base, total_score=breakdown.total, rmse=breakdown.rmse,
         ai_rmse=breakdown.ai_rmse, crowd_rmse=breakdown.crowd_rmse,
         beat_ai=any(b.key == "beat_ai" for b in breakdown.bonuses),
@@ -241,7 +241,6 @@ def submit(round_id: str, body: SubmitIn, background: BackgroundTasks,
         crowd_n=crowd_n,
         score_breakdown=breakdown.to_dict(),
         reveal_info=payload.get("reveal_info", {}),
-        is_fake=bool(rnd.is_fake),
         streak=breakdown.streak_after,
         ai_version=ai_service.version,
         player_total=player.total_score,
@@ -368,24 +367,6 @@ def dashboard(db: Session = Depends(get_session)) -> dict:
                func.avg(Drawing.rmse), func.count(Drawing.id))
         .group_by(Drawing.round_type).order_by(Drawing.round_type)).all()]
 
-    # 3b. Fake vs real headline reaction, the disinformation finding.
-    headline = []
-    for label, is_fake in (("real headline", False), ("fake headline", True)):
-        row = db.execute(
-            select(func.avg(Drawing.pred_move), func.avg(Drawing.true_move),
-                   func.avg(Drawing.base_score), func.count(Drawing.id))
-            .where(Drawing.round_type.in_(["stock", "fake_stock"]),
-                   Drawing.is_fake == is_fake)).first()
-        pred, true, score, n = row or (0, 0, 0, 0)
-        headline.append({
-            "label": label,
-            "avg_predicted_move": round(float(pred or 0), 5),
-            "avg_actual_move": round(float(true or 0), 5),
-            "overreaction": round(float(pred or 0) - float(true or 0), 5),
-            "avg_score": round(float(score or 0), 1),
-            "n": int(n or 0),
-        })
-
     # 4. Totals.
     beat_ai = db.scalar(select(func.count(Drawing.id)).where(Drawing.beat_ai)) or 0
     drawings = db.scalar(select(func.count(Drawing.id))) or 0
@@ -407,4 +388,4 @@ def dashboard(db: Session = Depends(get_session)) -> dict:
         "latest_note": latest.note if latest else "",
     }
     return {"versions": history, "improvement": improvement, "bias": bias,
-            "headline_bias": headline, "totals": totals}
+            "totals": totals}

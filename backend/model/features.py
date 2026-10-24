@@ -8,11 +8,6 @@ stopped, which is also what the canvas needs.
 Shape:
 
     [ 30 anchored lags | 9 shape stats | type-specific block ]
-
-Deliberately **not** a feature: ``is_fake``. The forecaster is an honest
-model of what prices do; telling it which headlines were fabricated would let
-it win the disinformation rounds for the wrong reason, and would make the
-dashboard's "did the AI fall for it?" comparison meaningless.
 """
 
 from __future__ import annotations
@@ -25,10 +20,8 @@ from .text import headline_feature_dim, headline_features
 
 LAGS = 30
 SHAPE_DIM = 9
-ROUND_TYPES = ("electricity", "stock", "trends", "fake_stock")
-# Fake-headline rounds are forecast by the plain stock model.
-MODEL_FOR_TYPE = {"electricity": "electricity", "stock": "stock",
-                  "fake_stock": "stock", "trends": "trends"}
+ROUND_TYPES = ("electricity", "stock", "trends")
+MODEL_FOR_TYPE = {"electricity": "electricity", "stock": "stock", "trends": "trends"}
 
 
 def _cyc(value: float, period: float) -> tuple[float, float]:

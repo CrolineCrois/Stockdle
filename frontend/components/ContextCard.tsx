@@ -1,10 +1,6 @@
 'use client';
 
-/**
- * The card above the chart. Fake-headline rounds get a distinct quarantine
- * frame *before* the reveal too — the game is about learning to doubt a
- * headline, not about being tricked without warning.
- */
+/** The card above the chart: what the player knows before drawing. */
 
 import type { GameRound } from '@/lib/api';
 
@@ -12,19 +8,16 @@ const ACCENT: Record<string, string> = {
   electricity: 'from-robot/15 to-transparent border-robot/30',
   stock: 'from-truth/15 to-transparent border-truth/30',
   trends: 'from-crowd/15 to-transparent border-crowd/30',
-  fake_stock: 'from-you/15 to-transparent border-you/40',
 };
 
 const EYEBROW_COLOR: Record<string, string> = {
   electricity: 'text-robot',
   stock: 'text-truth',
   trends: 'text-crowd',
-  fake_stock: 'text-you',
 };
 
 export default function ContextCard({ round }: { round: GameRound }) {
   const { context } = round;
-  const isFake = round.is_fake;
 
   return (
     <div
@@ -40,19 +33,10 @@ export default function ContextCard({ round }: { round: GameRound }) {
         >
           {context.eyebrow}
         </span>
-        {isFake && (
-          <span className="chip border-you/60 bg-you/10 text-you">
-            ⚠ unverified claim
-          </span>
-        )}
         {round.is_seed && <span className="chip">seed data</span>}
       </div>
 
-      <h2
-        className={`mt-2 text-balance text-lg font-semibold leading-snug sm:text-xl ${
-          isFake ? 'rounded-lg border border-dashed border-you/40 bg-you/[0.04] px-3 py-2' : ''
-        }`}
-      >
+      <h2 className="mt-2 text-balance text-lg font-semibold leading-snug sm:text-xl">
         {context.title}
       </h2>
 

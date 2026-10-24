@@ -24,11 +24,6 @@ const BLURB = [
     c: 'text-crowd',
     d: 'Weekly search interest for one term. When does the season spike?',
   },
-  {
-    k: 'Fakes',
-    c: 'text-you',
-    d: 'Some headlines never happened. Spot the ones the market would have ignored.',
-  },
 ];
 
 export default function Landing() {

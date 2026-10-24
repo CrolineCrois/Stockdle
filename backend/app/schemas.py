@@ -75,7 +75,6 @@ class SubmitOut(BaseModel):
     crowd_n: int
     score_breakdown: dict[str, Any]
     reveal_info: dict[str, Any]
-    is_fake: bool
     streak: int
     ai_version: int
     player_total: int

@@ -80,7 +80,7 @@ def load_rounds_catalogue(path: Path | None = None) -> tuple[int, int]:
             if row is None:
                 db.add(Round(
                     id=rec["id"], type=rec["type"], source_key=rec["source_key"],
-                    is_fake=bool(rec.get("is_fake")), is_seed=bool(rec.get("is_seed")),
+                    is_seed=bool(rec.get("is_seed")),
                     payload_json=json.dumps(rec), crowd_sum_json="", crowd_n=0,
                     active=True,
                 ))
@@ -88,7 +88,6 @@ def load_rounds_catalogue(path: Path | None = None) -> tuple[int, int]:
             else:
                 row.payload_json = json.dumps(rec)
                 row.type = rec["type"]
-                row.is_fake = bool(rec.get("is_fake"))
                 row.is_seed = bool(rec.get("is_seed"))
                 row.active = True
         for rid, row in existing.items():

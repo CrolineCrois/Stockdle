@@ -7,7 +7,7 @@ export const CURVE_LEN = 50;
 export const VISIBLE_LEN = 75;
 export const ROUND_SECONDS = 10;
 
-export type RoundType = 'electricity' | 'stock' | 'trends' | 'fake_stock';
+export type RoundType = 'electricity' | 'stock' | 'trends';
 
 export interface RoundContext {
   kind: RoundType;
@@ -16,7 +16,6 @@ export interface RoundContext {
   subtitle: string;
   chips: string[];
   headline?: string | null;
-  is_fake?: boolean;
   publisher?: string | null;
 }
 
@@ -27,6 +26,23 @@ export interface RoundScale {
   y_label: string;
 }
 
+export interface AxisTick {
+  /** Canvas index, 0..VISIBLE_LEN + CURVE_LEN - 1. */
+  i: number;
+  label: string;
+  /** A new day / year: always drawn, with a full-height gridline. */
+  major: boolean;
+}
+
+export interface RoundXAxis {
+  ticks: AxisTick[];
+  /** Inclusive canvas-index ranges to shade (night, on grid rounds). */
+  bands: Array<[number, number]>;
+  /** Local time at the cut, shown beside NOW. */
+  now: string;
+  note: string | null;
+}
+
 export interface GameRound {
   id: string;
   type: RoundType;
@@ -35,7 +51,8 @@ export interface GameRound {
   context: RoundContext;
   scale: RoundScale;
   x_label: string;
-  is_fake: boolean;
+  /** Absent on rounds built before local-time axes existed. */
+  x_axis?: RoundXAxis;
   is_seed: boolean;
 }
 
@@ -80,7 +97,6 @@ export interface RevealInfo {
   term?: string;
   cut_at?: string;
   headline?: string | null;
-  is_fake?: boolean;
   publisher?: string | null;
   forecast_high_f?: number | null;
   geo?: string;
@@ -94,7 +110,6 @@ export interface SubmitResult {
   crowd_n: number;
   score_breakdown: ScoreBreakdown;
   reveal_info: RevealInfo;
-  is_fake: boolean;
   streak: number;
   ai_version: number;
   player_total: number;
@@ -147,14 +162,6 @@ export interface DashboardData {
   }>;
   improvement: Array<{ bucket: string; avg_score: number; n: number }>;
   bias: Array<{ type: string; avg_signed_error: number; avg_abs_error: number; n: number }>;
-  headline_bias: Array<{
-    label: string;
-    avg_predicted_move: number;
-    avg_actual_move: number;
-    overreaction: number;
-    avg_score: number;
-    n: number;
-  }>;
   totals: {
     drawings: number;
     players: number;

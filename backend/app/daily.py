@@ -13,7 +13,7 @@ from datetime import date, timedelta
 
 # Day 1 was 2026-10-11, which makes 2026-10-24 "TAPE #14".
 EPOCH = date(2026, 10, 10)
-TYPE_ORDER = ("electricity", "stock", "trends", "fake_stock")
+TYPE_ORDER = ("electricity", "stock", "trends")
 
 
 def daily_number(day: date | None = None) -> int:
@@ -54,8 +54,7 @@ def pick_daily(ids_by_type: dict[str, list[str]], day: date | None = None,
 def share_grid(scores: list[int], beat_ai: int, number: int | None = None) -> str:
     """The copyable result line.
 
-    Scores only -- never a headline, never a ticker. Fabricated headlines in
-    particular must not travel outside a round that labels them as fake.
+    Scores only -- never a headline, never a ticker, so it spoils nothing.
     """
     number = number or daily_number()
     marks = " · ".join(str(int(s)) for s in scores)

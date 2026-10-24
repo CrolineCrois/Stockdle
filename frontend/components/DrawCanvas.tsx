@@ -37,7 +37,7 @@ const COVERAGE_TO_SUBMIT = 0.9;
 const TRUTH_MS = 1200;
 const GHOST_MS = 520;
 
-const PAD = { left: 56, right: 14, top: 18, bottom: 30 };
+const PAD = { left: 56, right: 14, top: 18, bottom: 44 };
 
 export type CanvasPhase = 'draw' | 'revealing' | 'revealed';
 
@@ -331,6 +331,18 @@ const DrawCanvas = forwardRef<DrawCanvasHandle, Props>(function DrawCanvas(
 
       ctx.clearRect(0, 0, w, h);
 
+      // Night bands (grid rounds): demand follows the local clock.
+      const axis = r.x_axis;
+      if (axis?.bands.length) {
+        ctx.fillStyle = 'rgba(96,120,200,0.09)';
+        const half = (xAt(1) - xAt(0)) / 2;
+        for (const [a, b] of axis.bands) {
+          const x0 = Math.max(PAD.left, xAt(a) - half);
+          const x1 = Math.min(xAt(TOTAL - 1), xAt(b) + half);
+          ctx.fillRect(x0, plotTop, x1 - x0, plotBottom - plotTop);
+        }
+      }
+
       // Prediction region tint.
       ctx.fillStyle = 'rgba(240,180,41,0.045)';
       ctx.fillRect(cutX, plotTop, xAt(TOTAL - 1) - cutX, plotBottom - plotTop);
@@ -352,11 +364,52 @@ const DrawCanvas = forwardRef<DrawCanvasHandle, Props>(function DrawCanvas(
         ctx.stroke();
         ctx.fillText(formatReal(v, r.scale), PAD.left - 8, y);
       }
+      // Time ticks. Majors (new day / year) go first and always show; minors
+      // fill in wherever they don't collide, so narrow screens thin out cleanly.
+      if (axis?.ticks.length) {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        const placed: Array<[number, number]> = [];
+        const fits = (x: number, half: number) =>
+          x - half >= PAD.left - 4 &&
+          x + half <= w - 2 &&
+          placed.every(([a, b]) => x + half + 8 < a || x - half - 8 > b);
+        const ordered = [...axis.ticks].sort((a, b) => Number(b.major) - Number(a.major));
+        for (const t of ordered) {
+          const x = xAt(t.i);
+          ctx.font = `${t.major ? '600 ' : ''}11px ui-monospace, Menlo, Consolas, monospace`;
+          const half = ctx.measureText(t.label).width / 2;
+          if (t.major) {
+            ctx.strokeStyle = 'rgba(148,163,196,0.22)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, plotTop);
+            ctx.lineTo(x, plotBottom);
+            ctx.stroke();
+          }
+          if (!fits(x, half)) continue;
+          placed.push([x - half, x + half]);
+          ctx.strokeStyle = 'rgba(148,163,196,0.45)';
+          ctx.beginPath();
+          ctx.moveTo(x, plotBottom);
+          ctx.lineTo(x, plotBottom + 4);
+          ctx.stroke();
+          ctx.fillStyle = t.major ? 'rgba(203,213,245,0.9)' : 'rgba(148,163,196,0.72)';
+          ctx.fillText(t.label, x, plotBottom + 16);
+        }
+      }
+
+      ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+      ctx.textBaseline = 'middle';
       ctx.textAlign = 'left';
       ctx.fillStyle = 'rgba(148,163,196,0.55)';
       ctx.fillText(r.scale.y_label, PAD.left, h - 10);
       ctx.textAlign = 'right';
-      ctx.fillText(`${r.x_label} →`, w - PAD.right, h - 10);
+      ctx.fillText(
+        axis?.note ? `shaded = ${axis.note}` : axis ? '' : `${r.x_label} →`,
+        w - PAD.right,
+        h - 10,
+      );
       ctx.restore();
 
       // Visible history.
@@ -376,7 +429,7 @@ const DrawCanvas = forwardRef<DrawCanvasHandle, Props>(function DrawCanvas(
       ctx.fillStyle = 'rgba(148,163,196,0.8)';
       ctx.font = '10px ui-monospace, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('NOW', cutX, plotTop - 6);
+      ctx.fillText(r.x_axis ? `NOW · ${r.x_axis.now}` : 'NOW', cutX, plotTop - 6);
       ctx.restore();
 
       const anchor: [number, number] = [cutX, yAt(r.visible[r.visible.length - 1])];

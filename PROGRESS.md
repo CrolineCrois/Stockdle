@@ -226,3 +226,27 @@ tests.
   unit-reasoned, but the drawing feel, the reveal animation timing, touch input
   and the mobile layout have not been looked at by a human or a screenshot. That
   is the first thing to check.
+
+---
+
+## Post-build: browser pass (2026-10-24)
+
+First time the app was driven in a real browser. Changes that came out of it:
+
+- **Fake-headline rounds removed.** With a warning label shown before drawing,
+  players had no way to *detect* a fake — the round only tested whether they
+  ignored a labelled rumour. Cut from the pipeline, game, dashboard and README;
+  the `is_fake` DB columns stay so older databases still load. Catalogue is now
+  179 rounds (grid 63, stock 80, trends 36).
+- **Local-time x-axis.** Timestamps were UTC end to end, so the grid card's
+  "cut at 21:00" in Los Angeles was really 2pm. Rounds now carry an `x_axis`
+  block (clock / day / month ticks, night bands on grid rounds, the time at the
+  cut) and the canvas draws it.
+- **Seed grid data fixed.** The load shape keyed off the UTC hour (LA peaked at
+  11am) and the weather was an unbounded random walk (123°F in LA). Now local
+  hour and a mean-reverting AR(1) anomaly; highs land 71–113°F.
+- **Fixed:** "Keep playing (Endless)" after a Daily stayed stuck on the summary
+  (same-route navigation never reloaded); `reset-demo` stranded every browser
+  that had played before on "Unknown player" (the client now re-registers).
+- **Demo seed** spreads its crowd-heavy rounds evenly across types, so every
+  type gets a blend weight.

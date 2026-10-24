@@ -102,9 +102,9 @@ class Persona:
         wobble = np.cumsum(np.convolve(raw, kernel, mode="same")) * 0.6
         curve = truth + crowd_misread(payload) * self.herding + wobble + self.drift
 
-        # Headline rounds: lean into the story, whether or not it is real.
+        # Headline rounds: lean into the story.
         headline = (payload.get("feat") or {}).get("headline") or ""
-        if payload["type"] in ("stock", "fake_stock") and headline:
+        if payload["type"] == "stock" and headline:
             from model.text import lexical_features
             tone = lexical_features(headline)[3]          # VADER compound
             push = tone * self.headline_gain * sigma * 6.0
@@ -141,8 +141,8 @@ def run(n_players: int, n_drawings: int, seed: int, do_reset: bool) -> dict:
             reset(db)
         ai_service.load_state(db)
 
-        round_ids = [r for (r,) in db.execute(
-            select(Round.id).where(Round.active)).all()]
+        typed = db.execute(select(Round.id, Round.type).where(Round.active)).all()
+        round_ids = [rid for rid, _ in typed]
         if not round_ids:
             raise SystemExit("no rounds — run `python -m pipeline.build_rounds --offline`")
 
@@ -160,7 +160,17 @@ def run(n_players: int, n_drawings: int, seed: int, do_reset: bool) -> dict:
         # so popular rounds accumulate a real crowd rather than one drawing each.
         pool = round_ids[:]
         pyrng.shuffle(pool)
-        hot = pool[: max(30, len(pool) // 4)]        # rounds the crowd converges on
+        # Rounds the crowd converges on, split evenly across types so every
+        # type gets enough crowd-backed rounds to fit its blend weight.
+        by_type: dict[str, list[str]] = {}
+        for rid, kind in typed:
+            by_type.setdefault(kind, []).append(rid)
+        per_type = max(30, len(pool) // 4) // max(1, len(by_type))
+        hot = []
+        for kind in sorted(by_type):
+            ids = sorted(by_type[kind])
+            pyrng.shuffle(ids)
+            hot += ids[:per_type]
         queues = {}
         for row in players:
             picks = pyrng.sample(hot, min(len(hot), 12)) + pyrng.sample(pool, 8)
@@ -198,7 +208,7 @@ def run(n_players: int, n_drawings: int, seed: int, do_reset: bool) -> dict:
                 db.add(Drawing(
                     round_id=round_id, player_id=row.id, curve_json=json.dumps(curve),
                     time_ms=int(rng.integers(2600, 9800)), mode="endless",
-                    round_type=rnd.type, is_fake=rnd.is_fake,
+                    round_type=rnd.type,
                     base_score=breakdown.base, total_score=breakdown.total,
                     rmse=breakdown.rmse, ai_rmse=breakdown.ai_rmse,
                     crowd_rmse=breakdown.crowd_rmse,

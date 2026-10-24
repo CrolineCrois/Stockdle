@@ -81,7 +81,6 @@ def fetch_live() -> list[dict]:
                 "idx": at,
                 "title": item["title"],
                 "published": item["published"].isoformat(),
-                "is_fake": False,
                 "publisher": item["publisher"],
             })
 

@@ -225,8 +225,6 @@ def test_daily_walks_through_five_rounds_then_finishes(client):
 def test_share_grid_shape_and_safety():
     text = share_grid([87, 92, 41, 78, 99], beat_ai=4, number=14)
     assert text == "TAPE #14 🎯 87 · 92 · 41 · 78 · 99 | beat AI 4/5"
-    # No headline, ticker or round id may appear in a share string.
-    assert "fake" not in text.lower()
 
 
 def test_pick_daily_handles_a_thin_catalogue():
@@ -261,9 +259,8 @@ def test_admin_retrain_requires_the_token(client):
 
 def test_dashboard_sections_are_present(client):
     body = client.get("/api/dashboard").json()
-    assert {"versions", "improvement", "bias", "headline_bias", "totals"} <= body.keys()
+    assert {"versions", "improvement", "bias", "totals"} <= body.keys()
     assert body["totals"]["drawings"] > 0
-    assert {h["label"] for h in body["headline_bias"]} == {"real headline", "fake headline"}
     assert "hidden" not in json.dumps(body)
 
 

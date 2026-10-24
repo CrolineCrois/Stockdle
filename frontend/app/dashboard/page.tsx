@@ -3,11 +3,10 @@
 /**
  * The "science" page: what the crowd actually taught the model.
  *
- * Four questions, four forms:
+ * Three questions, three forms:
  *   1. Did the blend beat either alone?        -> 3-series line over versions
  *   2. Do players improve with practice?       -> single-series bar, bucketed
  *   3. Which way are humans biased?            -> diverging bar around zero
- *   4. Do fake headlines move human drawings?  -> 2-series grouped bar
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -40,13 +39,11 @@ import { ACCENT, DIVERGING, SERIES } from '@/lib/palette';
 
 const TYPE_LABEL: Record<string, string> = {
   electricity: 'Grid demand',
-  stock: 'Real headline',
+  stock: 'Stock headline',
   trends: 'Search trends',
-  fake_stock: 'Fake headline',
 };
 
 const f4 = (v: number) => v.toFixed(4);
-const f3 = (v: number) => v.toFixed(3);
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -87,7 +84,7 @@ export default function DashboardPage() {
     );
   }
 
-  const { versions, improvement, bias, headline_bias: headline, totals } = data;
+  const { versions, improvement, bias, totals } = data;
   const last = versions[versions.length - 1];
   const blendWins =
     last?.blend != null && last.model != null && last.crowd != null
@@ -341,90 +338,6 @@ export default function DashboardPage() {
             )}
           </Panel>
 
-          {/* 3b. The disinformation finding. */}
-          <Panel
-            wide
-            kicker="Disinformation finding"
-            title="Do fabricated headlines move human predictions?"
-            caption="Average move players drew from the cut point, against the move that actually happened. A fake headline has no real information in it, so any gap is pure reaction to the words."
-            table={
-              <DataTable
-                head={['Headline', 'Players drew', 'Actually happened', 'Overreaction', 'Avg score', 'n']}
-                rows={headline.map((h) => [
-                  h.label,
-                  h.avg_predicted_move.toFixed(4),
-                  h.avg_actual_move.toFixed(4),
-                  h.overreaction.toFixed(4),
-                  h.avg_score,
-                  h.n,
-                ])}
-              />
-            }
-          >
-            {headline.every((h) => h.n === 0) ? (
-              <Empty what="No stock rounds played yet." />
-            ) : (
-              <>
-                <div className="h-56 w-full">
-                  <ResponsiveContainer>
-                    <BarChart
-                      data={headline}
-                      margin={{ top: 16, right: 8, bottom: 4, left: -8 }}
-                      barGap={6}
-                    >
-                      <CartesianGrid {...GRID_PROPS} />
-                      <XAxis dataKey="label" {...AXIS} />
-                      <YAxis {...AXIS} width={56} tickFormatter={(v: number) => v.toFixed(3)} />
-                      {tooltip({ format: f4 })}
-                      <Legend
-                        verticalAlign="top"
-                        align="left"
-                        height={26}
-                        wrapperStyle={{ fontSize: 12, color: '#94a3c4' }}
-                      />
-                      <ReferenceLine y={0} stroke={DIVERGING.midpoint} strokeWidth={1.5} />
-                      <Bar
-                        name="Players drew"
-                        dataKey="avg_predicted_move"
-                        fill={ACCENT}
-                        radius={[4, 4, 0, 0]}
-                      />
-                      <Bar
-                        name="Actually happened"
-                        dataKey="avg_actual_move"
-                        fill={SERIES.ai}
-                        radius={[4, 4, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {headline.map((h) => (
-                    <p key={h.label} className="rounded-lg bg-ink-800/50 px-3 py-2 text-xs text-chalk-dim">
-                      <span className="font-semibold text-chalk">{h.label}</span> ·{' '}
-                      {h.n === 0 ? (
-                        'no data yet'
-                      ) : (
-                        <>
-                          overreaction{' '}
-                          <span
-                            className="num font-semibold"
-                            style={{
-                              color: Math.abs(h.overreaction) > 0.01 ? DIVERGING.over : undefined,
-                            }}
-                          >
-                            {h.overreaction >= 0 ? '+' : ''}
-                            {f3(h.overreaction)}
-                          </span>{' '}
-                          over {h.n} drawings
-                        </>
-                      )}
-                    </p>
-                  ))}
-                </div>
-              </>
-            )}
-          </Panel>
         </div>
 
         <section className="panel mt-4 p-4 sm:p-5">

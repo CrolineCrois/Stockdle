@@ -123,7 +123,7 @@ def fetch_live() -> list[dict]:
             "t": stamps,
             "y": [round(float(v), 1) for v in y],
             "aux": {"temp_f": [round(float(v), 1) for v in temp_f]},
-            "meta": {"region": ba, "city": reg["city"],
+            "meta": {"region": ba, "city": reg["city"], "tz": reg["tz"],
                      "lat": reg["lat"], "lon": reg["lon"],
                      "source_note": "EIA-930 hourly demand + Open-Meteo archive"},
             "events": [],

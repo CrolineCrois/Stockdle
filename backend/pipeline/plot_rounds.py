@@ -18,7 +18,7 @@ import numpy as np  # noqa: E402
 from .common import HIDDEN_LEN, ROUNDS_DIR, VISIBLE_LEN, log, read_json  # noqa: E402
 
 TYPE_COLOR = {"electricity": "#38bdf8", "stock": "#34d399",
-              "trends": "#f472b6", "fake_stock": "#fbbf24"}
+              "trends": "#f472b6"}
 
 
 def plot(out_name: str = "round_preview.png", per_type: int = 3) -> str:
@@ -27,7 +27,7 @@ def plot(out_name: str = "round_preview.png", per_type: int = 3) -> str:
         raise SystemExit("no rounds built yet; run `python -m pipeline.build_rounds`")
 
     chosen: list[dict] = []
-    for kind in ("electricity", "stock", "trends", "fake_stock"):
+    for kind in ("electricity", "stock", "trends"):
         chosen += [r for r in rounds if r["type"] == kind][:per_type]
 
     cols = per_type
@@ -50,8 +50,6 @@ def plot(out_name: str = "round_preview.png", per_type: int = 3) -> str:
         for spine in ax.spines.values():
             spine.set_color("#1e293b")
         title = r["context"]["title"]
-        if r["is_fake"]:
-            title = "[FAKE] " + title
         ax.set_title(f"{r['type']} · {r['source_key']}\n{title[:58]}",
                      color="#e2e8f0", fontsize=7.5)
         ax.set_ylabel(r["scale"]["y_label"], color="#94a3b8", fontsize=7)

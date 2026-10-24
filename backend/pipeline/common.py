@@ -20,7 +20,7 @@ Series are passed around as plain dicts so they can be JSON-cached verbatim::
       "y": [45120.0, ...],
       "aux": {"temp_f": [...]},      # optional aligned covariates
       "meta": {...},                 # region/city/ticker/term ...
-      "events": [{"idx": 912, "title": "...", "published": "...", "is_fake": False}],
+      "events": [{"idx": 912, "title": "...", "published": "..."}],
     }
 """
 

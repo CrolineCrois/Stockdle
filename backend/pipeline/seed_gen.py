@@ -19,6 +19,7 @@ Run with::
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import numpy as np
 
@@ -28,11 +29,11 @@ MASTER_SEED = 20261024
 
 # --- 1. Electricity demand (EIA-930 shaped) -------------------------------
 REGIONS = [
-    {"ba": "ERCOT", "city": "Dallas, TX", "lat": 32.78, "lon": -96.80,
+    {"ba": "ERCOT", "city": "Dallas, TX", "tz": "America/Chicago", "lat": 32.78, "lon": -96.80,
      "base_mw": 38000, "cool": 1450, "heat": 620, "t_mean": 78, "t_amp": 16},
-    {"ba": "PJM", "city": "Philadelphia, PA", "lat": 39.95, "lon": -75.17,
+    {"ba": "PJM", "city": "Philadelphia, PA", "tz": "America/New_York", "lat": 39.95, "lon": -75.17,
      "base_mw": 78000, "cool": 1900, "heat": 1350, "t_mean": 62, "t_amp": 21},
-    {"ba": "CAISO", "city": "Los Angeles, CA", "lat": 34.05, "lon": -118.24,
+    {"ba": "CAISO", "city": "Los Angeles, CA", "tz": "America/Los_Angeles", "lat": 34.05, "lon": -118.24,
      "base_mw": 24000, "cool": 780, "heat": 290, "t_mean": 68, "t_amp": 10},
 ]
 
@@ -52,15 +53,22 @@ def _gen_electricity(rng: np.random.Generator, days: int = 150) -> list[dict]:
     for reg in REGIONS:
         n = days * 24
         stamps = [start + timedelta(hours=i) for i in range(n)]
-        doy = np.array([s.timetuple().tm_yday for s in stamps], dtype=float)
-        hod = np.array([s.hour for s in stamps], dtype=float)
-        dow = np.array([s.weekday() for s in stamps], dtype=float)
+        # Stamps are UTC; daily rhythms (load shape, the afternoon temperature
+        # peak, weekends) follow the region's local clock.
+        local = [s.astimezone(ZoneInfo(reg["tz"])) for s in stamps]
+        doy = np.array([s.timetuple().tm_yday for s in local], dtype=float)
+        hod = np.array([s.hour for s in local], dtype=float)
+        dow = np.array([s.weekday() for s in local], dtype=float)
 
-        # Temperature: annual sinusoid + diurnal swing + a slow weather walk.
+        # Temperature: annual sinusoid + diurnal swing + mean-reverting weather.
+        # An AR(1) anomaly (std ~4°F, decorrelates over ~1.5 days) gives heat
+        # waves and cold snaps without the unbounded drift of a random walk.
         annual = reg["t_mean"] + reg["t_amp"] * np.sin(2 * np.pi * (doy - 196) / 365.25)
         diurnal = 9.0 * np.sin(2 * np.pi * (hod - 9) / 24.0)
-        weather = np.cumsum(rng.normal(0, 0.55, n))
-        weather -= np.linspace(0, weather[-1], n)          # de-trend the walk
+        shocks = rng.normal(0, 0.95, n)
+        weather = np.zeros(n)
+        for i in range(1, n):
+            weather[i] = 0.97 * weather[i - 1] + shocks[i]
         temp_f = annual + diurnal + weather + rng.normal(0, 1.1, n)
 
         cdd = np.clip(temp_f - 68.0, 0, None)
@@ -87,7 +95,7 @@ def _gen_electricity(rng: np.random.Generator, days: int = 150) -> list[dict]:
             "y": [round(float(v), 1) for v in load],
             "aux": {"temp_f": [round(float(v), 1) for v in temp_f]},
             "meta": {
-                "region": reg["ba"], "city": reg["city"],
+                "region": reg["ba"], "city": reg["city"], "tz": reg["tz"],
                 "lat": reg["lat"], "lon": reg["lon"],
                 "synthetic": "load curve modelled on EIA-930 shape",
             },
@@ -185,7 +193,6 @@ def _gen_stocks(rng: np.random.Generator, days: int = 24) -> list[dict]:
                 "idx": at,
                 "title": tmpl.format(name=tk["name"], ticker=tk["t"]),
                 "published": stamps[at].isoformat(),
-                "is_fake": False,
                 "publisher": "Seed Newswire",
             })
 

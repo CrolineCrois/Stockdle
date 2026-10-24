@@ -55,6 +55,7 @@ class Round(Base):
     id: Mapped[str] = mapped_column(String(40), primary_key=True)
     type: Mapped[str] = mapped_column(String(20), index=True)
     source_key: Mapped[str] = mapped_column(String(40))
+    # Legacy: fake-headline rounds were removed. Kept so older databases load.
     is_fake: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_seed: Mapped[bool] = mapped_column(Boolean, default=True)
     payload_json: Mapped[str] = mapped_column(Text)
@@ -101,7 +102,7 @@ class Drawing(Base):
     time_ms: Mapped[int] = mapped_column(Integer, default=0)
     mode: Mapped[str] = mapped_column(String(10), default="endless")
     round_type: Mapped[str] = mapped_column(String(20), index=True)
-    is_fake: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_fake: Mapped[bool] = mapped_column(Boolean, default=False)   # legacy, always False
 
     base_score: Mapped[int] = mapped_column(Integer, default=0)
     total_score: Mapped[int] = mapped_column(Integer, default=0)
