@@ -41,7 +41,7 @@ def test_all_multipliers_stack():
 
 def test_timer_shrinks_with_streak_and_floors():
     assert scoring.timer_seconds(0, False) == config.TIMER_BASE_S
-    assert scoring.timer_seconds(3, False) == config.TIMER_BASE_S - 3
+    assert scoring.timer_seconds(3, False) == config.TIMER_BASE_S - 3 * config.TIMER_STREAK_STEP_S
     assert scoring.timer_seconds(99, False) == config.TIMER_MIN_S
     assert scoring.timer_seconds(0, True) == config.TIMER_BASE_S + config.TIMER_BOUNTY_BONUS_S
 

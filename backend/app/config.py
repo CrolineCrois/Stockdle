@@ -50,10 +50,10 @@ SNEAK_THRESHOLD = _env("SIP_SNEAK_THRESHOLD", 0.5)  # suspicion below this sneak
 NEAR_MISS_FROM = _env("SIP_NEAR_MISS_FROM", 0.4)    # "so close!" band: [0.4, 0.5)
 
 # Timer: base seconds, minus one per streak level, floored; bounties get extra.
-TIMER_BASE_S = _env("SIP_TIMER_BASE_S", 20.0)
-TIMER_MIN_S = _env("SIP_TIMER_MIN_S", 10.0)
-TIMER_STREAK_STEP_S = _env("SIP_TIMER_STREAK_STEP_S", 1.0)
-TIMER_BOUNTY_BONUS_S = _env("SIP_TIMER_BOUNTY_BONUS_S", 5.0)
+TIMER_BASE_S = _env("SIP_TIMER_BASE_S", 40.0)
+TIMER_MIN_S = _env("SIP_TIMER_MIN_S", 20.0)
+TIMER_STREAK_STEP_S = _env("SIP_TIMER_STREAK_STEP_S", 2.0)
+TIMER_BOUNTY_BONUS_S = _env("SIP_TIMER_BOUNTY_BONUS_S", 10.0)
 # Network slack: a submit that lands this many seconds after zero still counts.
 TIMER_GRACE_S = _env("SIP_TIMER_GRACE_S", 1.5)
 
