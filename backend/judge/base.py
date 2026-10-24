@@ -81,15 +81,21 @@ class Ruling:
 
 
 REASON_TEXT = {
-    "disagree": "The two judges disagreed about whether this is false",
-    "not_false": "Not a lie",
-    "implausible": "Nobody would believe that",
-    "ungrammatical": "Not grammatical",
-    "pedantic": "Too pedantic",
+    "disagree": "Too close to call — the two judges split on whether that's false, so it doesn't count.",
+    "not_false": "Still true — that edit doesn't change a checkable fact.",
+    "implausible": "Nobody would believe that{detail}.",
+    "ungrammatical": "That doesn't read as a real headline — check the grammar.",
+    "pedantic": "Too pedantic — that barely changes what the headline says.",
 }
 
 
-def rule(a: Verdict, b: Verdict, *, judge: str, model: str | None) -> Ruling:
+def reason_line(reason: str, added: str = "") -> str:
+    """The game's own one-line reason, so it can never contradict the ruling."""
+    detail = f" — “{added}” doesn't make sense here" if added and reason == "implausible" else ""
+    return REASON_TEXT[reason].format(detail=detail)
+
+
+def rule(a: Verdict, b: Verdict, *, judge: str, model: str | None, added: str = "") -> Ruling:
     """Combine two runs.
 
     Whether the edit is FALSE must be agreed by both runs (the spec's rule). For
@@ -109,7 +115,7 @@ def rule(a: Verdict, b: Verdict, *, judge: str, model: str | None) -> Ruling:
 
     def invalid(reason: str, by: Verdict) -> Ruling:
         return Ruling(valid=False, reason=reason,
-                      explanation=f"{REASON_TEXT[reason]}: {by.explanation}", **base)
+                      explanation=f"{reason_line(reason, added)} Judge’s note: {by.explanation}", **base)
 
     if a.is_false != b.is_false:
         return invalid("disagree", a if not a.is_false else b)
@@ -148,4 +154,6 @@ def judge_twice(judge: Judge, original: str, snippet: str, edited: str) -> Rulin
         fa = pool.submit(judge.judge, original, snippet, edited, "a")
         fb = pool.submit(judge.judge, original, snippet, edited, "b")
         a, b = fa.result(), fb.result()
-    return rule(a, b, judge=judge.name, model=getattr(judge, "model", None))
+    from app.diffing import word_diff
+    added = " ".join(c.after for c in word_diff(original, edited).changes if c.after)
+    return rule(a, b, judge=judge.name, model=getattr(judge, "model", None), added=added)

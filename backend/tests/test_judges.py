@@ -124,7 +124,7 @@ def test_split_grammar_vote_passes_but_both_flagging_fails():
     from judge.base import rule
     assert rule(_v(), _v(is_grammatical=False), judge="t", model=None).valid
     r = rule(_v(is_grammatical=False), _v(is_grammatical=False), judge="t", model=None)
-    assert not r.valid and r.reason == "ungrammatical" and r.explanation.startswith("Not grammatical:")
+    assert not r.valid and r.reason == "ungrammatical" and r.explanation.startswith("That doesn't read")
 
 
 def test_disagreement_quotes_the_run_that_said_not_false():
@@ -132,3 +132,11 @@ def test_disagreement_quotes_the_run_that_said_not_false():
     r = rule(_v(explanation="it is false"), _v(is_false=False, explanation="it is still true"),
              judge="t", model=None)
     assert r.reason == "disagree" and r.explanation.endswith("it is still true")
+
+
+
+def test_reason_line_names_the_nonsense_word():
+    from judge.base import rule
+    r = rule(_v(is_plausible=False), _v(is_plausible=False), judge="t", model=None, added="condor")
+    assert r.explanation.startswith("Nobody would believe that — “condor” doesn't make sense here.")
+    assert "Judge’s note:" in r.explanation

@@ -52,8 +52,9 @@ changes that keep the facts, and edits too vague to claim anything checkable.
 
 """ + RUBRIC + """
 
-explanation: one or two plain sentences a player will read, saying what changed and \
-why it is or is not a meaningful lie.
+explanation: at most 25 words, for the player. It must agree with your answers above: \
+if you say it is not plausible or not grammatical, say why; never call it false unless \
+is_false is true.
 
 Judge only what the edit claims relative to the original and the snippet. Do not use \
 outside knowledge to call the original headline wrong."""
@@ -73,7 +74,8 @@ equivalent headline, or one so hedged it asserts nothing checkable, is not false
 
 """ + RUBRIC + """
 
-explanation: one or two sentences, written for the person who made the edit.
+explanation: at most 25 words, for the person who made the edit, and consistent with \
+your answers above (don't call it false unless is_false is true).
 
 Base every answer on the original headline and the snippet only."""
 
