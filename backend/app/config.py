@@ -90,6 +90,6 @@ DETECTOR_MAX_LEN = _env("SIP_DETECTOR_MAX_LEN", 128)
 # Used for the judge and for v0's training fakes when OPENAI_API_KEY is set and
 # no Anthropic key is (or when SIP_JUDGE=openai / SIP_FAKES_PROVIDER=openai).
 # Run `python -m judge.check` to see which models your key can use.
-OPENAI_JUDGE_MODEL = _env("SIP_OPENAI_JUDGE_MODEL", "gpt-4o-mini")
-OPENAI_FAKES_MODEL = _env("SIP_OPENAI_FAKES_MODEL", "gpt-4o")
+OPENAI_JUDGE_MODEL = _env("SIP_OPENAI_JUDGE_MODEL", "gpt-4.1-mini")
+OPENAI_FAKES_MODEL = _env("SIP_OPENAI_FAKES_MODEL", "gpt-4.1")
 FAKES_PROVIDER = _env("SIP_FAKES_PROVIDER", "auto")   # auto | claude | openai | rules

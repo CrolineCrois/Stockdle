@@ -34,8 +34,8 @@ npm run scrape                    # fresh headlines from the RSS feeds
 ```
 
 The judge and v0's fake-writer use whichever key you set (Anthropic wins if both
-are): **Claude** (Sonnet 5.5 judge, Opus 5.5 fakes) or **OpenAI** (`gpt-4o-mini`
-judge, `gpt-4o` fakes by default — `judge.check` lists the models your key can use;
+are): **Claude** (Sonnet 5.5 judge, Opus 5.5 fakes) or **OpenAI** (`gpt-4.1-mini`
+judge, `gpt-4.1` fakes by default — `judge.check` lists the models your key can use;
 override with `SIP_OPENAI_JUDGE_MODEL` / `SIP_OPENAI_FAKES_MODEL`). Both get the
 identical prompt and must answer in the identical JSON schema. Without any key,
 v0 trains on rule-made fakes and the version note says so — re-run
