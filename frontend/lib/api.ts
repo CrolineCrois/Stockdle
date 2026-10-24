@@ -189,3 +189,24 @@ export const api = {
 
   leaderboard: () => request<{ rows: LeaderRow[] }>('/api/leaderboard'),
 };
+
+export interface ExploitRow {
+  id: number;
+  player: string;
+  original: string;
+  edited: string;
+  /** Always shown beside the edited text: these are player-made fakes. */
+  label: string;
+  edit_type: string;
+  changes: WordChange[];
+  points: number;
+  suspicion: number | null;
+  novelty_distance: number | null;
+  detector_version: string;
+  patched_in: string | null;
+  created_at: string;
+}
+
+export const exploitsApi = {
+  list: (limit = 20) => request<{ label: string; rows: ExploitRow[] }>(`/api/exploits?limit=${limit}`),
+};

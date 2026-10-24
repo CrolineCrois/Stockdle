@@ -34,7 +34,7 @@ from detector import registry
 from detector.base import predict_one
 from judge import JudgeUnavailable, get_judge
 
-from . import config, scoring
+from . import config, novelty, scoring
 from .diffing import word_diff
 from .models import Attempt, Headline, Player, Round, Run, utcnow
 
@@ -194,6 +194,7 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
     rnd.attempts_used += 1
     events: list[str] = []
     points: scoring.Points | None = None
+    embedding, novelty_distance, is_novel = None, None, False
 
     if not verdict_obj.valid_lie:
         outcome = "invalid"
@@ -204,10 +205,14 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
             events.append("exhausted")
     elif susp < config.SNEAK_THRESHOLD:
         outcome = "snuck"
+        embedding, novelty_distance, is_novel = novelty.assess(
+            db, headline.text, edited, diff.changed_words)
         points = scoring.sneak_points(suspicion=susp, num_words=diff.num_changes,
                                       streak=run.streak, remaining_s=max(0.0, remaining),
-                                      start_s=rnd.timer_start_s, is_novel=False,
+                                      start_s=rnd.timer_start_s, is_novel=is_novel,
                                       is_bounty=rnd.is_bounty)
+        if is_novel:
+            events.append("zero_day")
         run.score += points.total
         run.snuck += 1
         run.streak += 1
@@ -234,6 +239,8 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
                diff=diff, susp=susp, trace=trace, verdict=verdict, outcome=outcome,
                points=points.total if points else 0, remaining=remaining,
                time_to_submit_ms=time_to_submit_ms, timed_out=False)
+    att.novelty_distance, att.is_novel = novelty_distance, is_novel
+    att.edit_embedding_json = json.dumps(embedding) if embedding else ""
     run_over = _end_run_if_dead(db, run, player)
     return Result(att, outcome, points, verdict, near, round_over, run_over,
                   max(0.0, remaining_s(rnd)), events)

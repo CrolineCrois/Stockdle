@@ -5,6 +5,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 
 import type { SubmitResult } from '@/lib/api';
+import { useCountUp } from '@/lib/useCountUp';
 
 const STAMP = {
   snuck: { text: 'SNUCK PAST', cls: 'border-truth text-truth' },
@@ -25,6 +26,8 @@ export default function OutcomeCard({
   const stamp = STAMP[result.outcome];
   const exhausted = result.events.includes('exhausted');
   const p = result.points;
+  const shown = useCountUp(p?.total ?? 0);
+  const caught = result.outcome === 'caught' || result.outcome === 'timeout';
   const multipliers = p
     ? ([
         ['words', p.word_mult],
@@ -36,7 +39,7 @@ export default function OutcomeCard({
     : [];
 
   return (
-    <div className="panel relative overflow-hidden p-5">
+    <div className={`panel relative overflow-hidden p-5 ${caught ? 'animate-shake' : ''}`}>
       <motion.div
         initial={{ scale: 2.4, rotate: -14, opacity: 0 }}
         animate={{ scale: 1, rotate: -6, opacity: 1 }}
@@ -49,6 +52,7 @@ export default function OutcomeCard({
       <AnimatePresence>
         {result.events.includes('quick_hands') && (
           <motion.span
+            key="quick"
             initial={{ y: 10, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             className="ml-3 chip border-accent/60 text-accent"
@@ -56,8 +60,24 @@ export default function OutcomeCard({
             ⚡ Quick hands
           </motion.span>
         )}
+        {result.events.includes('zero_day') && (
+          <motion.span
+            key="zero"
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.15 }}
+            className="ml-3 chip border-crowd/60 text-crowd"
+          >
+            🧨 Zero-day exploit · +50%
+          </motion.span>
+        )}
+        {p && p.bounty_mult > 1 && (
+          <motion.span key="bounty" initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="ml-3 chip border-accent/60 text-accent">
+            ★ Bounty · 3×
+          </motion.span>
+        )}
         {result.near_miss && (
-          <motion.span initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="ml-3 chip">
+          <motion.span key="near" initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="ml-3 chip">
             so close!
           </motion.span>
         )}
@@ -100,7 +120,7 @@ export default function OutcomeCard({
 
       {p && (
         <div className="mt-4">
-          <p className="num text-4xl font-black text-accent">+{p.total.toLocaleString()}</p>
+          <p className="num text-4xl font-black text-accent">+{shown.toLocaleString()}</p>
           <p className="mt-1 text-xs text-chalk-dim">
             {p.base} base{multipliers.map(([k, m]) => ` × ${m} ${k}`).join('')}
           </p>

@@ -222,3 +222,29 @@ def leaderboard(db: Session = Depends(get_session)) -> dict:
     return {"rows": [{"rank": i + 1, "name": name, "score": r.score, "snuck": r.snuck,
                       "best_streak": r.best_streak, "detector_version": r.detector_version}
                      for i, (r, name) in enumerate(rows)]}
+
+
+FAKE_LABEL = "FAKE — made in Sneak It Past"
+
+
+@app.get("/api/exploits")
+def exploit_board(limit: int = 20, db: Session = Depends(get_session)) -> dict:
+    """The Exploit Board: novel tricks that got past the detector.
+
+    These are player-made fakes, so every one carries ``label`` and the client
+    must show it beside the text. There is deliberately no feed, export or
+    share path for them outside the game.
+    """
+    limit = max(1, min(limit, 50))
+    rows = db.execute(
+        select(Attempt, Player.name).join(Player, Player.id == Attempt.player_id)
+        .where(Attempt.outcome == "snuck", Attempt.is_novel)
+        .order_by(Attempt.points.desc()).limit(limit)).all()
+    return {"label": FAKE_LABEL, "rows": [{
+        "id": a.id, "player": name, "original": a.original_headline,
+        "edited": a.edited_headline, "label": FAKE_LABEL, "edit_type": a.edit_type,
+        "changes": a.changed_words, "points": a.points,
+        "suspicion": a.suspicion_score_final, "novelty_distance": a.novelty_distance,
+        "detector_version": a.detector_version, "patched_in": a.patched_in,
+        "created_at": a.created_at.isoformat() + "Z",
+    } for a, name in rows]}

@@ -129,6 +129,8 @@ class Attempt(Base):
     detector_version: Mapped[str] = mapped_column(String(20), index=True)
     novelty_distance: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_novel: Mapped[bool] = mapped_column(Boolean, default=False)
+    # The edit's embedding (successful exploits only), for later novelty checks.
+    edit_embedding_json: Mapped[str] = mapped_column(Text, default="")
     is_bounty: Mapped[bool] = mapped_column(Boolean, default=False)
     time_to_submit_ms: Mapped[int] = mapped_column(Integer, default=0)
 

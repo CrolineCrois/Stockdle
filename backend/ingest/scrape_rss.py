@@ -28,6 +28,8 @@ from app.models import Headline
 AGENT = "SneakItPast/0.1 (hackathon research game)"
 SKIP_PREFIXES = ("watch", "live", "video", "quiz", "opinion", "analysis", "in pictures",
                  "podcast", "listen", "photos", "explainer", "review")
+# Explainers and features rarely state a checkable fact, so there is nothing to twist.
+SKIP_STARTS = ("why ", "how ", "what ", "who ", "when ", "where ", "the week in")
 SNIPPET_CHARS = 400
 _TAG = re.compile(r"<[^>]+>")
 _SPACE = re.compile(r"\s+")
@@ -57,7 +59,7 @@ def usable(title: str, snippet: str) -> bool:
     words = title.split()
     low = title.lower()
     return (6 <= len(words) <= 22 and "?" not in title and len(snippet) >= 40
-            and not any(low.startswith(p) for p in SKIP_PREFIXES)
+            and not any(low.startswith(p) for p in SKIP_PREFIXES + SKIP_STARTS)
             and not any(f"{p}:" in low for p in SKIP_PREFIXES))
 
 

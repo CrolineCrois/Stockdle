@@ -16,9 +16,11 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import Confetti from '@/components/Confetti';
 import HeadlineEditor from '@/components/HeadlineEditor';
 import Nav from '@/components/Nav';
 import OutcomeCard from '@/components/OutcomeCard';
+import ShareCard from '@/components/ShareCard';
 import SuspicionMeter from '@/components/SuspicionMeter';
 import TimerBar from '@/components/TimerBar';
 import {
@@ -49,6 +51,7 @@ export default function Play() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
+  const [confetti, setConfetti] = useState(0);
 
   const deadlineRef = useRef(0);          // performance.now() at which the clock hits 0
   const roundShownRef = useRef(0);        // performance.now() when the headline appeared
@@ -113,7 +116,10 @@ export default function Play() {
         setPhase('editing');
         return;
       }
-      if (res.outcome === 'snuck') sound.sneak();
+      if (res.outcome === 'snuck') {
+        sound.sneak();
+        setConfetti((n) => n + 1);
+      }
       else if (res.outcome === 'invalid') sound.invalid();
       else sound.caught();
       setResult(res);
@@ -270,6 +276,7 @@ export default function Play() {
   return (
     <>
       <Nav right={hud} />
+      <Confetti fire={confetti} />
       <main className="mx-auto w-full max-w-3xl space-y-4 px-4 pb-16 pt-5">
         {phase === 'error' && (
           <div className="panel p-5">
@@ -311,6 +318,7 @@ export default function Play() {
                 }}
                 onSubmit={() => void submit()}
               />
+              <div className="sticky bottom-0 z-20 -mx-4 space-y-3 border-t border-ink-700 bg-ink-950/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
               <SuspicionMeter
                 value={meter?.suspicion ?? null}
                 threshold={rules.threshold}
@@ -337,6 +345,7 @@ export default function Play() {
                   Reset
                 </button>
               </div>
+              </div>
             </section>
           </>
         )}
@@ -348,17 +357,13 @@ export default function Play() {
         {phase === 'over' && run && (
           <section className="panel p-6 text-center">
             <p className="label">Run over</p>
-            <p className="num mt-2 text-6xl font-black text-accent">{run.score.toLocaleString()}</p>
-            <p className="mt-2 text-sm text-chalk-dim">
-              {run.snuck} snuck past · {run.caught} caught · best streak {run.best_streak} · detector{' '}
-              <span className="num">{run.detector_version}</span>
-            </p>
+            <ShareCard run={run} />
             <div className="mt-5 flex flex-wrap justify-center gap-3">
               <button type="button" className="btn-primary" onClick={() => void playAgain()}>
                 Play again
               </button>
-              <button type="button" className="btn-ghost" onClick={() => router.push('/leaderboard')}>
-                Leaderboard
+              <button type="button" className="btn-ghost" onClick={() => router.push('/board')}>
+                Exploit Board
               </button>
             </div>
           </section>

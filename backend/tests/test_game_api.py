@@ -187,3 +187,28 @@ def test_bounties_are_flagged_by_the_current_detector(client):
     with SessionLocal() as db:
         assert db.query(Headline).filter(Headline.is_bounty).count() > 0
     assert registry.current_name() == "stub"
+
+
+def test_first_exploit_is_a_zero_day_and_reaches_the_board(client):
+    from app import novelty
+    if not novelty.available():
+        pytest.skip("sentence-transformers not installed")
+    from app import config
+    old = config.SNEAK_THRESHOLD
+    config.SNEAK_THRESHOLD = 1.01          # make sure this one sneaks past
+    try:
+        pid, state = new_run(client, "Novel")
+        body = client.post(f"/api/round/{state['round']['id']}/submit", json={
+            "player_id": pid, "edited": lie(headline_of(state))}).json()
+    finally:
+        config.SNEAK_THRESHOLD = old
+    assert body["outcome"] == "snuck"
+    with SessionLocal() as db:
+        att = db.query(Attempt).order_by(Attempt.id.desc()).first()
+        assert att.novelty_distance is not None and att.edit_embedding_json
+    board = client.get("/api/exploits").json()
+    assert board["label"].startswith("FAKE")
+    assert all(r["label"].startswith("FAKE") for r in board["rows"])
+    if att.is_novel:
+        assert "zero_day" in body["events"] and body["points"]["novelty_mult"] == 1.5
+        assert any(r["id"] == att.id for r in board["rows"])

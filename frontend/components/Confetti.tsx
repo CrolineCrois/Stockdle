@@ -1,6 +1,6 @@
 'use client';
 
-/** Canvas confetti for bullseyes. Self-cleaning, no dependencies. */
+/** Canvas confetti for a successful sneak. Self-cleaning, no dependencies. */
 
 import { useEffect, useRef } from 'react';
 
