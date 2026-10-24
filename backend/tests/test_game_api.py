@@ -341,3 +341,24 @@ def test_exploits_await_review(client):
         att = db.query(Attempt).order_by(Attempt.id.desc()).first()
         expected = "pending" if body["outcome"] in ("snuck", "partial") else ""
         assert att.review_status == expected
+
+
+def test_review_flow_and_judge_precision(client):
+    from app import config
+    pid, state = new_run(client, "ReviewFlow")
+    body = client.post(f"/api/round/{state['round']['id']}/submit",
+                       json={"player_id": pid, "edited": lie(headline_of(state))}).json()
+    if body["outcome"] not in ("snuck", "partial"):
+        pytest.skip("mock judge flagged this edit; nothing to review")
+    hdr = {"x-admin-token": config.ADMIN_TOKEN}
+    assert client.get("/api/admin/review").status_code == 401
+    q = client.get("/api/admin/review", headers=hdr).json()
+    item = next(i for i in q["items"] if i["edited"] == " ".join(lie(headline_of(state)).split()))
+    assert len(item["judge_runs"]) == 2 and q["label"].startswith("FAKE")
+    r = client.post(f"/api/admin/review/{item['id']}", headers=hdr,
+                    json={"decision": "approved", "reviewer": "alice"}).json()
+    assert r["review_status"] == "approved" and r["stats"]["approved"] >= 1
+    assert r["stats"]["judge_precision"] is not None
+    bad = client.post(f"/api/admin/review/{item['id']}", headers=hdr,
+                      json={"decision": "maybe", "reviewer": "alice"})
+    assert bad.status_code == 422

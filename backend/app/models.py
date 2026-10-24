@@ -241,3 +241,17 @@ class VerifierVersion(Base):
     n_train: Mapped[int] = mapped_column(Integer, default=0)
     metrics_json: Mapped[str] = mapped_column(Text, default="{}")
     note: Mapped[str] = mapped_column(String(300), default="")
+
+
+class Review(Base):
+    """One reviewer's decision on one exploit. Every decision is kept (not just
+    the latest), so reviewer agreement and judge accuracy can be measured."""
+
+    __tablename__ = "reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    attempt_id: Mapped[int] = mapped_column(ForeignKey("attempts.id"), index=True)
+    reviewer_id: Mapped[str] = mapped_column(String(40))
+    decision: Mapped[str] = mapped_column(String(10))          # approved | rejected
+    note: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

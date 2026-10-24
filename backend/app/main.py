@@ -13,6 +13,8 @@
     GET  /api/detector/versions         every detector version and its metrics
     POST /api/admin/patch-day           run a patch day (x-admin-token)
     GET  /api/analytics                 everything on the /lab dashboard
+    GET  /api/admin/review              exploit review queue + counters (x-admin-token)
+    POST /api/admin/review/{id}         approve / reject an exploit (x-admin-token)
     GET  /api/health                    status, current detector, judge in use
 """
 
@@ -28,12 +30,13 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from detector import registry
 from judge import get_judge
 
-from . import analytics, config, game
+from . import analytics, config, game, review
 from .db import get_session, init_db
 from .diffing import word_diff
 from .models import Attempt, Headline, Player, Round, Run, utcnow
@@ -343,3 +346,38 @@ def get_analytics(judge: str = "all", db: Session = Depends(get_session)) -> dic
     if judge not in ("all", "real"):
         raise HTTPException(422, "judge must be 'all' or 'real'")
     return analytics.build(db, judge)
+
+
+def _admin(token: str | None) -> None:
+    if token != config.ADMIN_TOKEN:
+        raise HTTPException(401, "bad admin token")
+
+
+@app.get("/api/admin/review")
+def review_queue(status: str = "pending", limit: int = 50,
+                 x_admin_token: str | None = Header(default=None),
+                 db: Session = Depends(get_session)) -> dict:
+    """Exploits waiting for (or past) human review. Admin only: contains fakes."""
+    _admin(x_admin_token)
+    if status not in ("pending", "approved", "rejected", "all"):
+        raise HTTPException(422, "bad status")
+    return {"label": FAKE_LABEL, "items": review.queue(db, status, max(1, min(limit, 200))),
+            "stats": review.stats(db)}
+
+
+class ReviewIn(BaseModel):
+    decision: str = Field(pattern="^(approved|rejected)$")
+    reviewer: str = Field(min_length=1, max_length=40)
+    note: str = Field(default="", max_length=300)
+
+
+@app.post("/api/admin/review/{attempt_id}")
+def review_decide(attempt_id: int, body: ReviewIn,
+                  x_admin_token: str | None = Header(default=None),
+                  db: Session = Depends(get_session)) -> dict:
+    _admin(x_admin_token)
+    try:
+        a = review.decide(db, attempt_id, body.decision, body.reviewer, body.note)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"id": a.id, "review_status": a.review_status, "stats": review.stats(db)}

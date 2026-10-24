@@ -296,3 +296,51 @@ export interface Analytics {
 export const analyticsApi = {
   get: (judge: 'all' | 'real') => request<Analytics>(`/api/analytics?judge=${judge}`),
 };
+
+export interface ReviewItem {
+  id: number;
+  created_at: string;
+  outcome: 'snuck' | 'partial';
+  mode: 'evidence' | 'breaking';
+  original: string;
+  edited: string;
+  changes: WordChange[];
+  edit_type: string;
+  materiality: number | null;
+  specificity: number | null;
+  original_specificity: number | null;
+  vagueness_flags: string[];
+  judge: string;
+  judge_runs: { phrasing: string; is_false: boolean; materiality: number; specificity: number; explanation: string }[];
+  verifier: { verdict: string; version: string; probs: Record<string, number> };
+  evidence: { text: string; source: string; same_story: boolean }[];
+  review_status: string;
+  reviewer_id: string | null;
+}
+
+export interface ReviewStats {
+  attempts: number;
+  judge_valid: number;
+  exploits: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  target_before_patch_day: number;
+  judge_precision: number | null;
+  decisions_logged: number;
+  by_edit_type: { edit_type: string; exploits: number; approved?: number; rejected?: number; pending?: number }[];
+}
+
+export const adminApi = {
+  queue: (token: string, status: string) =>
+    request<{ label: string; items: ReviewItem[]; stats: ReviewStats }>(
+      `/api/admin/review?status=${status}`,
+      { headers: { 'x-admin-token': token } },
+    ),
+  decide: (token: string, id: number, decision: 'approved' | 'rejected', reviewer: string, note = '') =>
+    request<{ id: number; review_status: string; stats: ReviewStats }>(`/api/admin/review/${id}`, {
+      method: 'POST',
+      headers: { 'x-admin-token': token },
+      body: JSON.stringify({ decision, reviewer, note }),
+    }),
+};
