@@ -67,8 +67,11 @@ def finetune(name: str, init: str | Path, examples: list[Example], out_dir: Path
         total = 0.0
         for i in range(0, len(order), batch_size):
             batch = [examples[j] for j in order[i:i + batch_size]]
+            # Pad to multiples of 64 tokens: Apple's MPS backend recompiles for every
+            # new tensor shape, so free-length padding made each batch pay a compile.
             enc = tok([e.premise for e in batch], [e.claim for e in batch], truncation="only_first",
-                      max_length=config.VERIFIER_MAX_LEN, padding=True, return_tensors="pt").to(device)
+                      max_length=config.VERIFIER_MAX_LEN, padding=True, pad_to_multiple_of=64,
+                      return_tensors="pt").to(device)
             target = torch.tensor([col[e.label] for e in batch], device=device)
             loss = torch.nn.functional.cross_entropy(model(**enc).logits, target, weight=weight)
             loss.backward()

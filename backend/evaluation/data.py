@@ -92,6 +92,11 @@ def human_sets(include_pending: bool = False) -> dict:
         fresh_after = datetime.fromisoformat(split["patch_day_at"]) if split["patch_day_at"] else None
         rows = exploits(db, include_pending)
         out = {"train": [], "test": [], "fresh": [], "true_test": []}
+        # Stamp each exploit's evaluation side onto its log row.
+        for a, h in rows:
+            a.split = ("fresh" if fresh_after and a.created_at > fresh_after
+                       else sides.get(str(h.id), "train"))
+        db.commit()
         premises: dict[int, str] = {}
         for a, h in rows:
             premise = premises.setdefault(h.id, source_premise(db, h))
