@@ -70,6 +70,7 @@ class Run(Base):
     best_streak: Mapped[int] = mapped_column(Integer, default=0)
     score: Mapped[int] = mapped_column(Integer, default=0)
     snuck: Mapped[int] = mapped_column(Integer, default=0)
+    partial: Mapped[int] = mapped_column(Integer, default=0)
     caught: Mapped[int] = mapped_column(Integer, default=0)
     rounds_played: Mapped[int] = mapped_column(Integer, default=0)
     detector_version: Mapped[str] = mapped_column(String(20), default="")
@@ -93,7 +94,10 @@ class Round(Base):
     paused_s: Mapped[float] = mapped_column(Float, default=0.0)
     attempts_used: Mapped[int] = mapped_column(Integer, default=0)
     is_bounty: Mapped[bool] = mapped_column(Boolean, default=False)
-    # active -> snuck | caught | timeout | exhausted (3 invalid attempts)
+    # "evidence": the source article is in the verifier's index. "breaking": it
+    # is excluded, simulating a story with no coverage yet (bounty rounds).
+    mode: Mapped[str] = mapped_column(String(10), default="evidence")
+    # active -> snuck | partial | caught | timeout | exhausted (3 invalid attempts)
     status: Mapped[str] = mapped_column(String(12), default="active")
 
 
@@ -121,8 +125,28 @@ class Attempt(Base):
     judge_output_json: Mapped[str] = mapped_column(Text, default="{}")
     edit_type: Mapped[str] = mapped_column(String(30), default="")
 
-    # snuck | caught | invalid | timeout
+    # snuck | partial | caught | invalid | timeout
     outcome: Mapped[str] = mapped_column(String(10), index=True)
+    mode: Mapped[str] = mapped_column(String(10), default="evidence")
+
+    # The evidence verifier's decision (decides the round).
+    verifier_version: Mapped[str] = mapped_column(String(30), default="", index=True)
+    verifier_verdict: Mapped[str] = mapped_column(String(10), default="")   # supported|refuted|nei
+    verifier_probs_json: Mapped[str] = mapped_column(Text, default="{}")
+    retrieved_passage_ids_json: Mapped[str] = mapped_column(Text, default="[]")
+
+    # The judge's ruling, both runs (judge_output_json holds the full ruling).
+    materiality: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    specificity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    original_specificity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    vagueness_flags_json: Mapped[str] = mapped_column(Text, default="[]")
+    tags_json: Mapped[str] = mapped_column(Text, default="[]")
+
+    # Human review: only approved exploits train or evaluate a verifier.
+    review_status: Mapped[str] = mapped_column(String(10), default="", index=True)  # ""|pending|approved|rejected
+    reviewer_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    split: Mapped[str] = mapped_column(String(10), default="")           # train|test|fresh
     points: Mapped[int] = mapped_column(Integer, default=0)
     streak: Mapped[int] = mapped_column(Integer, default=0)      # after this attempt
     lives_left: Mapped[int] = mapped_column(Integer, default=0)

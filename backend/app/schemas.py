@@ -53,13 +53,14 @@ def player_out(p: Player) -> dict:
 def run_out(run: Run) -> dict:
     return {"id": run.id, "lives": run.lives, "max_lives": config.LIVES,
             "streak": run.streak, "best_streak": run.best_streak, "score": run.score,
-            "snuck": run.snuck, "caught": run.caught, "rounds_played": run.rounds_played,
+            "snuck": run.snuck, "partial": run.partial, "caught": run.caught,
+            "rounds_played": run.rounds_played,
             "over": run.ended_at is not None, "detector_version": run.detector_version}
 
 
 def round_out(rnd: Round, headline: Headline) -> dict:
     return {
-        "id": rnd.id, "status": rnd.status, "is_bounty": rnd.is_bounty,
+        "id": rnd.id, "status": rnd.status, "is_bounty": rnd.is_bounty, "mode": rnd.mode,
         "timer_start_s": rnd.timer_start_s,
         "remaining_s": round(max(0.0, game.remaining_s(rnd)), 3),
         "attempts_used": rnd.attempts_used, "max_attempts": config.MAX_ATTEMPTS,

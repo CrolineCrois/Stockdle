@@ -56,6 +56,10 @@ async def lifespan(_app: FastAPI):
     try:
         det = registry.current_name()
         registry.current().predict([("warm up", "warm up")])   # load weights now, not on first keystroke
+        from verifier import registry as verifiers
+        from verifier.retrieval import retrieve
+        verifiers.current().score("warm up", ["warm up"])      # and the verifier, not on first submit
+        retrieve("warm up")
     except LookupError:
         det = "none (run `python -m detector.train_stub`)"
     print(f"[api] ready — detector {det}, judge {get_judge().name}", flush=True)
@@ -180,11 +184,30 @@ def live_suspicion(round_id: str, body: EditIn, db: Session = Depends(get_sessio
     }
 
 
+def _evidence_out(db: Session, ver) -> list[dict]:
+    """The passages the verifier used, as short attributed excerpts for the reveal."""
+    if ver is None:
+        return []
+    out = []
+    for e in ver.passages:
+        h = db.get(Headline, e.headline_id)
+        text = e.text if len(e.text) <= 420 else e.text[:420].rsplit(" ", 1)[0] + "…"
+        out.append({"text": text, "source": h.source if h else "", "url": h.url if h else "",
+                    "headline": h.text if h else "", "probs": e.probs, "decisive": e.decisive})
+    return out
+
+
 def _result_out(db: Session, res: game.Result, run: Run) -> dict:
     a = res.attempt
+    ver = res.verification
     return {
         "outcome": res.outcome,
         "suspicion": a.suspicion_score_final,
+        "mode": a.mode,
+        "tags": res.tags,
+        "verifier": None if ver is None else {
+            "verdict": ver.verdict, "probs": ver.probs, "version": ver.version,
+            "evidence": _evidence_out(db, ver)},
         "points": res.points.to_dict() if res.points else None,
         "verdict": res.verdict,
         "changes": a.changed_words,

@@ -12,7 +12,7 @@ from functools import lru_cache
 
 from app import config
 
-from .base import EDIT_TYPES, Judge, JudgeUnavailable, Verdict
+from .base import EDIT_TYPES, Judge, JudgeUnavailable, Ruling, Verdict, judge_twice
 
 
 @lru_cache(maxsize=1)
@@ -35,4 +35,4 @@ def get_judge() -> Judge:
     return MockJudge()
 
 
-__all__ = ["EDIT_TYPES", "Judge", "JudgeUnavailable", "Verdict", "get_judge"]
+__all__ = ["EDIT_TYPES", "Judge", "JudgeUnavailable", "Ruling", "Verdict", "get_judge", "judge_twice"]

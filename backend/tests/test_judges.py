@@ -8,8 +8,9 @@ import pytest
 
 from judge.base import JudgeUnavailable
 
-VERDICT = {"is_false": True, "is_plausible": True, "is_grammatical": True,
-           "edit_type": "number change", "explanation": "80mph became 180mph."}
+VERDICT = {"is_false": True, "is_plausible": True, "is_grammatical": True, "materiality": 4,
+           "specificity": 5, "original_specificity": 5, "vagueness_flags": [],
+           "edit_type": "number", "explanation": "80mph became 95mph."}
 
 
 def openai_reply(content=None, refusal=None):
@@ -38,7 +39,7 @@ def claude_judge(monkeypatch):
 def test_openai_judge_parses_a_valid_verdict(openai_judge, monkeypatch):
     monkeypatch.setattr(openai_judge, "_ask", lambda *a: openai_reply(json.dumps(VERDICT)))
     v = openai_judge.judge("a", "b", "c")
-    assert v.is_false and v.edit_type == "number change" and v.valid_lie
+    assert v.is_false and v.edit_type == "number"
 
 
 def test_openai_refusal_is_unavailable(openai_judge, monkeypatch):
@@ -80,3 +81,40 @@ def test_auto_picks_openai_when_only_its_key_is_set(monkeypatch):
         assert judge.get_judge().name == "openai"
     finally:
         judge.get_judge.cache_clear()
+
+
+def _v(**kw):
+    from judge.base import Verdict
+    base = dict(is_false=True, is_grammatical=True, is_plausible=True, materiality=4,
+                specificity=4, original_specificity=4, vagueness_flags=[], edit_type="number",
+                explanation="x")
+    return Verdict(**{**base, **kw})
+
+
+def test_ruling_requires_both_runs_to_agree():
+    from judge.base import rule
+    r = rule(_v(), _v(is_false=False), judge="t", model=None)
+    assert not r.valid and r.reason == "disagree"
+
+
+def test_ruling_pedantic_is_invalid():
+    from judge.base import rule
+    r = rule(_v(materiality=2), _v(), judge="t", model=None)
+    assert not r.valid and r.reason == "pedantic" and "Too pedantic" in r.tags()
+
+
+def test_ruling_vague_halves_or_catches():
+    from judge.base import rule
+    half = rule(_v(specificity=3, original_specificity=5), _v(specificity=3), judge="t", model=None)
+    assert half.valid and half.vague and not half.vague_caught
+    caught = rule(_v(specificity=2, vagueness_flags=["added hedge: may"]), _v(), judge="t", model=None)
+    assert caught.valid and caught.vague_caught and caught.vagueness_flags == ["added hedge: may"]
+
+
+def test_ruling_sharp_lie():
+    from judge.base import rule
+    r = rule(_v(specificity=5, original_specificity=5), _v(specificity=5, original_specificity=5),
+             judge="t", model=None)
+    assert r.sharp and "Sharp lie ×1.5" in r.tags()
+    assert not rule(_v(specificity=3, original_specificity=3), _v(specificity=3, original_specificity=3),
+                    judge="t", model=None).sharp

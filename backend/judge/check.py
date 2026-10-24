@@ -16,13 +16,14 @@ import time
 from app import config
 
 from . import get_judge
-from .base import JudgeUnavailable
+from .base import JudgeUnavailable, judge_twice
 
 ORIGINAL = "Storm Boelo to bring 80mph gusts and heavy rain to parts of UK"
 SNIPPET = "Second named storm will hit northern parts of the UK as thousands remain without power."
 SAMPLES = [
-    ("a believable lie (should be is_false=true, plausible=true)", "Storm Boelo to bring 95mph gusts and heavy rain to parts of UK"),
-    ("a rewording (should be is_false=false)", "Storm Boelo set to bring 80mph gusts and heavy rain to parts of UK"),
+    ("a sharp lie (should be valid, Sharp lie)", "Storm Boelo to bring 95mph gusts and heavy rain to parts of UK"),
+    ("a rewording (should be invalid: not false)", "Storm Boelo set to bring 80mph gusts and heavy rain to parts of UK"),
+    ("a vague edit (should be Too vague)", "Storm Boelo may bring strong gusts and heavy rain to parts of UK"),
 ]
 
 
@@ -45,13 +46,14 @@ def main() -> None:
     for label, edited in SAMPLES:
         t0 = time.monotonic()
         try:
-            v = judge.judge(ORIGINAL, SNIPPET, edited)
+            r = judge_twice(judge, ORIGINAL, SNIPPET, edited)
         except JudgeUnavailable as exc:
             print(f"{label}: UNAVAILABLE ({exc})")
             continue
-        print(f"{label}: is_false={v.is_false} plausible={v.is_plausible} "
-              f"grammatical={v.is_grammatical} type={v.edit_type!r} "
-              f"({time.monotonic() - t0:.1f}s)\n    {v.explanation}")
+        print(f"{label}: valid={r.valid} reason={r.reason or '-'} tags={r.tags()} "
+              f"materiality={r.materiality} specificity={r.original_specificity}->{r.specificity} "
+              f"flags={r.vagueness_flags} type={r.edit_type!r} ({time.monotonic() - t0:.1f}s, 2 runs)"
+              f"\n    {r.explanation}")
 
 
 if __name__ == "__main__":

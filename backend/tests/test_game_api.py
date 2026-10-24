@@ -27,6 +27,26 @@ def client():
         yield c
 
 
+VERDICT = {"value": "supported"}       # what the stub verifier says; tests may change it
+
+
+@pytest.fixture(autouse=True)
+def stub_verifier(monkeypatch):
+    """Deterministic verifier for game tests: no model, no corpus needed."""
+    from app import game
+    from verifier.verify import Verification
+
+    def fake(claim, source_headline_id, mode="evidence", **_):
+        v = VERDICT["value"]
+        probs = {"supported": 0.9 if v == "supported" else 0.05,
+                 "refuted": 0.9 if v == "refuted" else 0.05, "nei": 0.9 if v == "nei" else 0.05}
+        return Verification(v, probs, "v0-stub", mode, [])
+
+    monkeypatch.setattr(game, "verify", fake)
+    VERDICT["value"] = "supported"
+    yield
+
+
 def new_run(client, name="Tester"):
     pid = client.post("/api/player", json={"name": name}).json()["player_id"]
     state = client.post("/api/run", json={"player_id": pid}).json()
@@ -93,11 +113,12 @@ def test_a_valid_lie_is_judged_scored_and_logged(client):
     body = client.post(f"/api/round/{rid}/submit", json={
         "player_id": pid, "edited": lie(headline_of(state)), "trace": trace,
         "time_to_submit_ms": 950}).json()
-    assert body["outcome"] in {"snuck", "caught"}
-    assert body["verdict"]["judge"] == "mock" and body["verdict"]["is_false"]
+    assert body["outcome"] in {"snuck", "caught"}          # mock judge may flag it vague
+    assert body["verdict"]["judge"] == "mock" and len(body["verdict"]["runs"]) == 2
     run = body["state"]["run"]
     if body["outcome"] == "snuck":
         assert body["points"]["total"] > 0 and run["streak"] == 1 and run["lives"] == 3
+        assert body["verifier"]["verdict"] == "supported" and "Misread evidence!" in body["tags"]
     else:
         assert run["lives"] == 2 and run["streak"] == 0
     with SessionLocal() as db:
@@ -290,3 +311,32 @@ def test_analytics_has_every_dashboard_section(client):
     real = client.get("/api/analytics?judge=real").json()
     assert real["totals"]["attempts"] <= body["totals"]["attempts"]
     assert client.get("/api/analytics?judge=bogus").status_code == 422
+
+
+
+def test_verifier_decides_partial_and_caught(client):
+    VERDICT["value"] = "nei"
+    pid, state = new_run(client, "Partial")
+    body = client.post(f"/api/round/{state['round']['id']}/submit",
+                       json={"player_id": pid, "edited": lie(headline_of(state))}).json()
+    if body["outcome"] == "partial":
+        assert body["points"]["partial_mult"] == 0.3
+        assert body["state"]["run"]["streak"] == 0 and body["state"]["run"]["lives"] == 3
+    VERDICT["value"] = "refuted"
+    pid, state = new_run(client, "Refuted")
+    body = client.post(f"/api/round/{state['round']['id']}/submit",
+                       json={"player_id": pid, "edited": lie(headline_of(state))}).json()
+    assert body["outcome"] == "caught" and body["state"]["run"]["lives"] == 2
+    with SessionLocal() as db:
+        att = db.query(Attempt).order_by(Attempt.id.desc()).first()
+        assert att.verifier_verdict in ("refuted", "") and att.mode in ("evidence", "breaking")
+
+
+def test_exploits_await_review(client):
+    pid, state = new_run(client, "Reviewee")
+    body = client.post(f"/api/round/{state['round']['id']}/submit",
+                       json={"player_id": pid, "edited": lie(headline_of(state))}).json()
+    with SessionLocal() as db:
+        att = db.query(Attempt).order_by(Attempt.id.desc()).first()
+        expected = "pending" if body["outcome"] in ("snuck", "partial") else ""
+        assert att.review_status == expected

@@ -4,18 +4,26 @@ The server owns the clock. A round's remaining time is
 
     timer_start - (now - started_at - paused)
 
-where ``paused`` is time spent waiting on the judge, so API latency never
-costs the player. A submission arriving up to ``TIMER_GRACE_S`` after zero
-still counts (network slack); later than that it is a timeout.
+where ``paused`` is time spent waiting on the judge and the verifier, so API
+and model latency never cost the player. A submission arriving up to
+``TIMER_GRACE_S`` after zero still counts (network slack); later than that it
+is a timeout.
 
-Outcomes of one submission:
+One submission:
 
-    invalid   the judge says it is not false / not plausible / not grammatical.
-              No life lost; the attempt is used. A third invalid attempt ends
-              the round as "exhausted": no life lost, but the streak resets.
-    snuck     judged false AND suspicion < 0.5: points, streak + 1.
-    caught    judged false AND suspicion >= 0.5: lose a life, streak resets.
-    timeout   the clock ran out first: counts as caught.
+    1. The judge runs twice (two phrasings). Invalid -- no life lost, the try is
+       used -- if they disagree, if it isn't false / plausible / grammatical, or
+       if materiality < 3 ("Too pedantic"). A third invalid try ends the round
+       as "exhausted": no life lost, but the streak resets.
+    2. Too vague with specificity <= 2 counts as CAUGHT outright.
+    3. Otherwise the evidence verifier decides:
+         SUPPORTED  -> snuck    full points, streak + 1   ("Misread evidence!")
+         NOT ENOUGH -> partial  0.3x points, streak held (doesn't grow)
+         REFUTED    -> caught   lose a life, streak resets
+    The clock running out first is a timeout, which counts as caught.
+
+The style model's suspicion is computed and logged for the live meter only;
+it never decides an outcome.
 """
 
 from __future__ import annotations
@@ -32,7 +40,8 @@ from sqlalchemy.orm import Session
 
 from detector import registry
 from detector.base import predict_one
-from judge import JudgeUnavailable, get_judge
+from judge import JudgeUnavailable, get_judge, judge_twice
+from verifier.verify import BREAKING, EVIDENCE, Verification, verify
 
 from . import config, novelty, scoring
 from .diffing import word_diff
@@ -83,6 +92,7 @@ def next_round(db: Session, run: Run) -> Round:
     headline = db.get(Headline, random.choice(choices))
     rnd = Round(id=uuid.uuid4().hex[:20], run_id=run.id, headline_id=headline.id,
                 is_bounty=headline.is_bounty,
+                mode=BREAKING if headline.is_bounty else EVIDENCE,
                 timer_start_s=scoring.timer_seconds(run.streak, headline.is_bounty))
     db.add(rnd)
     db.flush()
@@ -90,6 +100,7 @@ def next_round(db: Session, run: Run) -> Round:
 
 
 def suspicion(headline: Headline, edited: str) -> float:
+    """The style model's "first glance" score for the live meter."""
     return round(predict_one(registry.current(), edited, headline.snippet), 4)
 
 
@@ -100,6 +111,8 @@ class Result:
     outcome: str
     points: scoring.Points | None
     verdict: dict
+    verification: Verification | None
+    tags: list[str]
     near_miss: bool
     round_over: bool
     run_over: bool
@@ -122,7 +135,8 @@ def _end_run_if_dead(db: Session, run: Run, player: Player) -> bool:
 
 def _log(db: Session, *, rnd: Round, run: Run, player: Player, headline: Headline,
          edited: str, diff, susp: float | None, trace: list, verdict: dict, outcome: str,
-         points: int, remaining: float, time_to_submit_ms: int, timed_out: bool) -> Attempt:
+         points: int, remaining: float, time_to_submit_ms: int, timed_out: bool,
+         verification: Verification | None = None, tags: list[str] | None = None) -> Attempt:
     att = Attempt(
         round_id=rnd.id, run_id=run.id, player_id=player.id, attempt_no=rnd.attempts_used,
         headline_id=headline.id, original_headline=headline.text, edited_headline=edited,
@@ -134,7 +148,18 @@ def _log(db: Session, *, rnd: Round, run: Run, player: Player, headline: Headlin
         detector_version=registry.current_name(), is_bounty=rnd.is_bounty,
         time_to_submit_ms=time_to_submit_ms, timer_start_seconds=rnd.timer_start_s,
         time_remaining_at_submit=round(max(0.0, remaining), 3), timed_out=timed_out,
+        mode=rnd.mode, tags_json=json.dumps(tags or []),
+        materiality=verdict.get("materiality"), specificity=verdict.get("specificity"),
+        original_specificity=verdict.get("original_specificity"),
+        vagueness_flags_json=json.dumps(verdict.get("vagueness_flags", [])),
+        # Lies that got through (fully or partly) wait for human review.
+        review_status="pending" if outcome in ("snuck", "partial") else "",
     )
+    if verification is not None:
+        att.verifier_version = verification.version
+        att.verifier_verdict = verification.verdict
+        att.verifier_probs_json = json.dumps(verification.probs)
+        att.retrieved_passage_ids_json = json.dumps(verification.passage_ids)
     db.add(att)
     db.flush()
     return att
@@ -152,7 +177,7 @@ def _timeout(db: Session, run: Run, rnd: Round, player: Player, headline: Headli
                time_to_submit_ms=time_to_submit_ms, timed_out=True)
     _end_round(db, run, rnd, "timeout")
     over = _end_run_if_dead(db, run, player)
-    return Result(att, "timeout", None, {}, False, True, over, 0.0, ["times_up"])
+    return Result(att, "timeout", None, {}, None, [], False, True, over, 0.0, ["times_up"])
 
 
 def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
@@ -176,53 +201,40 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
                         f"{config.MAX_WORD_CHANGES}.")
 
     susp = suspicion(headline, edited)          # server-side: never trust the client's meter
-    remaining = remaining_s(rnd)                # frozen now; the judge's time is not counted
+    remaining = remaining_s(rnd)                # frozen now; judge + verifier time not counted
 
     judge = get_judge()
     t0 = time.monotonic()
     try:
-        verdict_obj = judge.judge(headline.text, headline.snippet, edited)
+        ruling = judge_twice(judge, headline.text, headline.snippet, edited)
     except JudgeUnavailable as exc:
         rnd.paused_s += time.monotonic() - t0   # refund the wait; no attempt used
         db.commit()
         raise GameError(f"The judge is unavailable ({exc}). Your clock was paused; "
                         "try again.", 503) from exc
+    verdict = ruling.to_dict()
+    verdict["judge"] = judge.name
+    verdict["model"] = getattr(judge, "model", None)
+
+    verification = None
+    if ruling.valid and not ruling.vague_caught:
+        verification = verify(edited, headline.id, rnd.mode)
     rnd.paused_s += time.monotonic() - t0
-    verdict = {**verdict_obj.model_dump(), "judge": judge.name,
-               "model": getattr(judge, "model", None)}
 
     rnd.attempts_used += 1
     events: list[str] = []
+    tags = ruling.tags()
     points: scoring.Points | None = None
     embedding, novelty_distance, is_novel = None, None, False
 
-    if not verdict_obj.valid_lie:
+    if not ruling.valid:
         outcome = "invalid"
         round_over = rnd.attempts_used >= config.MAX_ATTEMPTS
         if round_over:
             run.streak = 0
             _end_round(db, run, rnd, "exhausted")
             events.append("exhausted")
-    elif susp < config.SNEAK_THRESHOLD:
-        outcome = "snuck"
-        embedding, novelty_distance, is_novel = novelty.assess(
-            db, headline.text, edited, diff.changed_words)
-        points = scoring.sneak_points(suspicion=susp, num_words=diff.num_changes,
-                                      streak=run.streak, remaining_s=max(0.0, remaining),
-                                      start_s=rnd.timer_start_s, is_novel=is_novel,
-                                      is_bounty=rnd.is_bounty)
-        if is_novel:
-            events.append("zero_day")
-        run.score += points.total
-        run.snuck += 1
-        run.streak += 1
-        run.best_streak = max(run.best_streak, run.streak)
-        _end_round(db, run, rnd, "snuck")
-        round_over = True
-        events.append("snuck")
-        if points.quick_hands:
-            events.append("quick_hands")
-    else:
+    elif ruling.vague_caught or verification.verdict == "refuted":
         outcome = "caught"
         run.lives -= 1
         run.caught += 1
@@ -230,20 +242,49 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
         _end_round(db, run, rnd, "caught")
         round_over = True
         events.append("caught")
+    else:
+        outcome = "snuck" if verification.verdict == "supported" else "partial"
+        if outcome == "snuck":
+            embedding, novelty_distance, is_novel = novelty.assess(
+                db, headline.text, edited, diff.changed_words)
+            if is_novel:
+                events.append("zero_day")
+            if rnd.mode == EVIDENCE:
+                tags.append("Misread evidence!")
+        else:
+            tags.append("Not enough info ×0.3")
+        points = scoring.sneak_points(
+            suspicion=verification.probs.get("refuted", 0.0), num_words=diff.num_changes,
+            streak=run.streak, remaining_s=max(0.0, remaining), start_s=rnd.timer_start_s,
+            is_novel=is_novel, is_bounty=rnd.is_bounty, materiality=ruling.materiality,
+            sharp=ruling.sharp, vague=ruling.vague, partial=outcome == "partial")
+        run.score += points.total
+        if outcome == "snuck":
+            run.snuck += 1
+            run.streak += 1                       # partial holds the streak, doesn't grow it
+            run.best_streak = max(run.best_streak, run.streak)
+        else:
+            run.partial += 1
+        _end_round(db, run, rnd, outcome)
+        round_over = True
+        events.append(outcome)
+        if points.quick_hands:
+            events.append("quick_hands")
 
-    # Suspicion in [0.4, 0.5) is still under the line: snuck past, but only just.
-    near = outcome == "snuck" and scoring.is_near_miss(susp)
+    # Verifier's P(refuted) in [0.4, 0.5) on a sneak: under the line, but only just.
+    near = outcome == "snuck" and scoring.is_near_miss(verification.probs.get("refuted", 0.0))
     if near:
         events.append("near_miss")
     att = _log(db, rnd=rnd, run=run, player=player, headline=headline, edited=edited,
                diff=diff, susp=susp, trace=trace, verdict=verdict, outcome=outcome,
                points=points.total if points else 0, remaining=remaining,
-               time_to_submit_ms=time_to_submit_ms, timed_out=False)
+               time_to_submit_ms=time_to_submit_ms, timed_out=False,
+               verification=verification, tags=tags)
     att.novelty_distance, att.is_novel = novelty_distance, is_novel
     att.edit_embedding_json = json.dumps(embedding) if embedding else ""
     run_over = _end_run_if_dead(db, run, player)
-    return Result(att, outcome, points, verdict, near, round_over, run_over,
-                  max(0.0, remaining_s(rnd)), events)
+    return Result(att, outcome, points, verdict, verification, tags, near, round_over,
+                  run_over, max(0.0, remaining_s(rnd)), events)
 
 
 def report_timeout(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,

@@ -20,7 +20,7 @@ import anthropic
 from app import config
 
 from .base import JudgeUnavailable, Verdict
-from .prompt import SCHEMA, SYSTEM
+from .prompt import PROMPTS, SCHEMA, user_message
 
 class ClaudeJudge:
     name = "claude"
@@ -29,28 +29,23 @@ class ClaudeJudge:
         self.model = config.JUDGE_MODEL
         self._client = anthropic.Anthropic(timeout=config.JUDGE_TIMEOUT_S, max_retries=2)
 
-    def _ask(self, original: str, snippet: str, edited: str):
+    def _ask(self, original: str, snippet: str, edited: str, phrasing: str = "a"):
         return self._client.beta.messages.create(
             model=self.model,
             max_tokens=4000,
-            system=SYSTEM,
+            system=PROMPTS[phrasing],
             output_config={"effort": "low",
                            "format": {"type": "json_schema", "schema": SCHEMA}},
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
-            messages=[{
-                "role": "user",
-                "content": (f"Original headline: {original}\n\n"
-                            f"Article snippet: {snippet or '(none)'}\n\n"
-                            f"Edited headline: {edited}"),
-            }],
+            messages=[{"role": "user", "content": user_message(original, snippet, edited)}],
         )
 
-    def judge(self, original: str, snippet: str, edited: str) -> Verdict:
+    def judge(self, original: str, snippet: str, edited: str, phrasing: str = "a") -> Verdict:
         last_error = "no attempt made"
         for _ in range(2):                       # one retry on malformed output
             try:
-                response = self._ask(original, snippet, edited)
+                response = self._ask(original, snippet, edited, phrasing)
             except anthropic.AuthenticationError as exc:
                 raise JudgeUnavailable("judge API key was rejected") from exc
             except anthropic.RateLimitError as exc:
