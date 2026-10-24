@@ -108,6 +108,30 @@ def benchmark_meter(name: str, force: bool = False) -> dict:
     return bench
 
 
+GLANCE_FILE = "glance_benchmark.json"
+
+
+def benchmark_glance(force: bool = False) -> dict:
+    """The live meter in its default mode: the current verifier's P(refuted) on
+    the single best source passage, on the meter's held-out set."""
+    from . import config as cfg
+    path = cfg.DATA_DIR / "eval" / GLANCE_FILE
+    with SessionLocal() as db:
+        trues, fakes = _sets(db, _meter_test_ids(db))
+    key = [len(trues), len(fakes), verifiers.current_name()]
+    if not force and path.exists():
+        saved = json.loads(path.read_text())
+        if saved.get("set") == key:
+            return saved
+    model = verifiers.current()
+    flag = lambda items: [float(model.score(c, [premise_for(hid)])[0]["refuted"] >= 0.5)  # noqa: E731
+                          for c, hid in items]
+    bench = _summary(flag(fakes), flag(trues), tuple(key))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(bench))
+    return bench
+
+
 def live_by_verifier(db) -> list[dict]:
     """Of the judge-valid lies played against each verifier version, how many it caught."""
     from evaluation.metrics import ci
@@ -129,16 +153,25 @@ def summary() -> dict:
         mrows = db.scalars(select(DetectorVersion).order_by(DetectorVersion.created_at)).all()
         live = live_by_verifier(db)
         cur_v, cur_m = verifiers.current_name(), meters.current_name()
+        from . import config as cfg
+        glance_live = cfg.METER != "style"
+        meter_rows = [{"name": m.name, "n_train": m.n_train, "created_at": m.created_at.isoformat() + "Z",
+                       "is_current": m.name == cur_m and not glance_live, "note": m.note,
+                       "benchmark": json.loads(m.metrics_json or "{}").get("benchmark")}
+                      for m in mrows if m.name == "stub" or m.name.startswith("v")]
+        path = cfg.DATA_DIR / "eval" / GLANCE_FILE
+        if path.exists():
+            meter_rows.append({"name": f"glance ({cur_v})", "n_train": 0, "created_at": "",
+                               "is_current": glance_live,
+                               "note": "the fact-checker on the best source passage",
+                               "benchmark": json.loads(path.read_text())})
         return {
             "verifier": [{"name": v.name, "train_data": v.train_data, "n_train": v.n_train,
                           "created_at": v.created_at.isoformat() + "Z", "is_current": v.name == cur_v,
                           "note": v.note,
                           "benchmark": json.loads(v.metrics_json or "{}").get("benchmark")}
                          for v in vrows if v.train_data in ("none", "human")],
-            "meter": [{"name": m.name, "n_train": m.n_train, "created_at": m.created_at.isoformat() + "Z",
-                       "is_current": m.name == cur_m, "note": m.note,
-                       "benchmark": json.loads(m.metrics_json or "{}").get("benchmark")}
-                      for m in mrows if m.name == "stub" or m.name.startswith("v")],
+            "meter": meter_rows,
             "live": live,
         }
 
@@ -158,6 +191,7 @@ def main() -> None:
             print(f"[bench] meter {n}: {benchmark_meter(n, force=True)}")
         except Exception as exc:  # noqa: BLE001 -- an old version whose files are gone
             print(f"[bench] meter {n}: skipped ({type(exc).__name__}: {exc})")
+    print(f"[bench] meter glance: {benchmark_glance(force=True)}")
 
 
 if __name__ == "__main__":

@@ -143,8 +143,8 @@ export default function Scorecard({ data }: { data: LearningSummary }) {
   const live = data.verifier.find((v) => v.is_current);
   const liveNow = data.live.find((x) => x.version === live?.name)?.caught;
   const retrained = data.verifier.filter((v) => v.train_data === 'human').length > 0;
-  const meterFirst = data.meter[0]?.benchmark?.lies_caught.value;
-  const meterNow = data.meter.find((m) => m.is_current)?.benchmark?.lies_caught.value;
+  const first = data.meter[0]?.benchmark;
+  const now = data.meter.find((m) => m.is_current)?.benchmark;
 
   return (
     <section className="panel mt-8 p-4 sm:p-5">
@@ -198,8 +198,8 @@ export default function Scorecard({ data }: { data: LearningSummary }) {
 
       <h3 className="mt-6 font-bold">The first-glance meter, version by version</h3>
       <p className="mt-1 text-sm text-chalk-dim">
-        {meterFirst != null && meterNow != null
-          ? `It went from catching ${pct(meterFirst)} of machine-written lies to ${pct(meterNow)} — at the cost of more false alarms, which the aqua bars show honestly.`
+        {first && now
+          ? `From its first version to the live one, it went from catching ${pct(first.lies_caught.value)} of machine-written lies to ${pct(now.lies_caught.value)}, and from wrongly flagging ${pct(first.true_flagged.value)} of true headlines to ${pct(now.true_flagged.value)}.`
           : 'Scored on its own held-out headlines.'}
       </p>
       <div className="mt-3">

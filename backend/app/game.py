@@ -88,10 +88,12 @@ def next_round(db: Session, run: Run) -> Round:
     if active is not None:
         return active                               # idempotent: one live round at a time
 
-    # Only headlines with evidence fetched: without article text the verifier
-    # could only ever say "not enough info".
+    # Prefer headlines whose article body was fetched: with only the one-line
+    # snippet (paywalled or blocked sites) the verifier mostly says "not enough
+    # info". Fall back to snippet-only headlines, then to anything.
+    with_body = select(Passage.headline_id).where(Passage.kind == "body")
     pool = set(db.scalars(select(Headline.id).where(Headline.active)
-                          .where(Headline.id.in_(select(Passage.headline_id)))).all())
+                          .where(Headline.id.in_(with_body))).all())
     if not pool:
         pool = set(db.scalars(select(Headline.id).where(Headline.active)).all())
     # Prefer headlines this player has never seen, in any run; then ones not seen
