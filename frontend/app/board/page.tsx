@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react';
 
+import ChangeList from '@/components/ChangeList';
 import Nav from '@/components/Nav';
 import { api, exploitsApi, type ExploitRow, type LeaderRow } from '@/lib/api';
 
@@ -60,13 +61,7 @@ export default function Board() {
               </div>
               <p className="mt-3 text-sm text-chalk-faint line-through decoration-chalk-faint/60">{x.original}</p>
               <p className="mt-1 select-none font-semibold text-chalk">
-                {x.changes.map((c, i) => (
-                  <span key={i} className="mr-2">
-                    {c.before && <span className="text-chalk-faint line-through">{c.before}</span>}
-                    {c.before && c.after && ' → '}
-                    {c.after && <span className="text-accent">{c.after}</span>}
-                  </span>
-                ))}
+                <ChangeList changes={x.changes} />
               </p>
               <p className="mt-2 text-xs text-chalk-dim">
                 <span className="font-semibold text-chalk">{x.player}</span> ·{' '}

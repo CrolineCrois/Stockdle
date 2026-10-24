@@ -404,3 +404,28 @@ def test_auto_submitted_non_lie_ends_the_round(client):
     body = client.post(f"/api/round/{rid}/submit", json={
         "player_id": pid, "edited": " ".join(words), "auto": True}).json()
     assert body["outcome"] == "timeout" and body["round_over"]
+
+
+def test_repeating_a_rejected_edit_costs_nothing_and_auto_skips_the_judge(client):
+    fillers = {"to", "in", "of", "the", "for", "on", "at"}
+    for _ in range(40):                         # deal until the mock judge rejects the edit
+        pid, state = new_run(client, "Repeater")
+        rid, words = state["round"]["id"], headline_of(state).split()
+        i = next((k for k, w in enumerate(words) if w.lower() in fillers), None)
+        if i is None:
+            continue
+        words[i] = "the" if words[i].lower() != "the" else "a"
+        edit = " ".join(words)
+        first = client.post(f"/api/round/{rid}/submit", json={"player_id": pid, "edited": edit}).json()
+        if first["outcome"] == "invalid" and not first["round_over"]:
+            break
+    else:
+        pytest.fail("never got a rejected edit to repeat")
+    again = client.post(f"/api/round/{rid}/submit", json={"player_id": pid, "edited": edit})
+    assert again.status_code == 409 and "already tried" in again.json()["detail"]
+    with SessionLocal() as db:
+        assert db.get(Round, rid).attempts_used == 1           # the repeat used no try
+    _expire(rid)
+    auto = client.post(f"/api/round/{rid}/submit",
+                       json={"player_id": pid, "edited": edit, "auto": True}).json()
+    assert auto["outcome"] == "timeout" and auto["verdict"].get("explanation")

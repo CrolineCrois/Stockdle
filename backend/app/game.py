@@ -169,18 +169,18 @@ def _log(db: Session, *, rnd: Round, run: Run, player: Player, headline: Headlin
 
 
 def _timeout(db: Session, run: Run, rnd: Round, player: Player, headline: Headline,
-             edited: str, trace: list, time_to_submit_ms: int) -> Result:
+             edited: str, trace: list, time_to_submit_ms: int, verdict: dict | None = None) -> Result:
     run.lives -= 1
     run.caught += 1
     run.streak = 0
     rnd.attempts_used += 1
     att = _log(db, rnd=rnd, run=run, player=player, headline=headline, edited=edited,
                diff=word_diff(headline.text, edited), susp=None, trace=trace,
-               verdict={}, outcome="timeout", points=0, remaining=0.0,
+               verdict=verdict or {}, outcome="timeout", points=0, remaining=0.0,
                time_to_submit_ms=time_to_submit_ms, timed_out=True)
     _end_round(db, run, rnd, "timeout")
     over = _end_run_if_dead(db, run, player)
-    return Result(att, "timeout", None, {}, None, [], False, True, over, 0.0, ["times_up"])
+    return Result(att, "timeout", None, verdict or {}, None, [], False, True, over, 0.0, ["times_up"])
 
 
 def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
@@ -195,6 +195,20 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
 
     if remaining_s(rnd) < -config.TIMER_GRACE_S:
         return _timeout(db, run, rnd, player, headline, edited, trace, time_to_submit_ms)
+
+    # An exact repeat of an edit the judge already ruled not-a-lie this round:
+    # answer from that ruling instead of burning a try (and a judge call) on it.
+    prior = db.scalar(select(Attempt).where(Attempt.round_id == rnd.id, Attempt.outcome == "invalid",
+                                            Attempt.edited_headline == edited)
+                      .order_by(Attempt.id.desc()))
+    if prior is not None:
+        ruling_was = json.loads(prior.judge_output_json or "{}")
+        if not auto:
+            raise GameError(f"You already tried that exact edit — "
+                            f"{ruling_was.get('explanation') or 'the judge said it is not a lie.'} "
+                            "Change something before resubmitting.", 409)
+        return _timeout(db, run, rnd, player, headline, edited, trace, time_to_submit_ms,
+                        verdict=ruling_was)
 
     diff = word_diff(headline.text, edited)
     if auto and not 1 <= diff.num_changes <= config.MAX_WORD_CHANGES:

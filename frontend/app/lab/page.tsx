@@ -25,6 +25,7 @@ import {
   YAxis,
 } from 'recharts';
 
+import ChangeList from '@/components/ChangeList';
 import Nav from '@/components/Nav';
 import { analyticsApi, exploitsApi, type Analytics, type CI, type ExploitRow } from '@/lib/api';
 import { INK, SERIES, pct } from '@/lib/viz';
@@ -457,13 +458,7 @@ export default function Lab() {
                     <div key={x.id} className="rounded-xl bg-ink-950/50 p-3 text-sm">
                       <span className="chip border-danger/60 bg-danger/10 font-bold text-danger">{x.label}</span>
                       <p className="mt-2 select-none">
-                        {x.changes.map((c, i) => (
-                          <span key={i} className="mr-2">
-                            {c.before && <span className="text-chalk-faint line-through">{c.before}</span>}
-                            {c.before && c.after && ' → '}
-                            {c.after && <span className="font-semibold text-accent">{c.after}</span>}
-                          </span>
-                        ))}
+                        <ChangeList changes={x.changes} />
                         <span className="text-chalk-faint">· {x.edit_type} · {x.player}</span>
                       </p>
                     </div>

@@ -7,6 +7,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 
+import ChangeList from '@/components/ChangeList';
 import type { SubmitResult } from '@/lib/api';
 import { useCountUp } from '@/lib/useCountUp';
 
@@ -114,13 +115,7 @@ export default function OutcomeCard({
         <p className="text-chalk-faint line-through decoration-chalk-faint/60">{original}</p>
         {result.changes.length > 0 && (
           <p className="text-chalk">
-            {result.changes.map((c, i) => (
-              <span key={i} className="mr-2">
-                {c.before && <span className="text-chalk-faint line-through">{c.before}</span>}
-                {c.before && c.after && ' → '}
-                {c.after && <span className="font-semibold text-accent">{c.after}</span>}
-              </span>
-            ))}
+            <ChangeList changes={result.changes} />
           </p>
         )}
       </div>
@@ -141,7 +136,9 @@ export default function OutcomeCard({
             </>
           ) : (
             <p className="mt-1 text-chalk-dim">
-              {result.outcome === 'timeout' ? 'Never got to check it.' : 'Not checked: the judge ruled first.'}
+              {result.outcome === 'timeout' && !result.verdict.explanation
+                ? 'Never got to check it.'
+                : 'Not checked: the judge ruled it isn’t a usable lie.'}
             </p>
           )}
           {result.suspicion !== null && (
@@ -153,7 +150,9 @@ export default function OutcomeCard({
         <div className="rounded-xl bg-ink-950/60 p-3 text-sm">
           <p className="label">Judge{result.verdict.judge === 'mock' ? ' (mock)' : ''}</p>
           <p className="mt-1 text-chalk-dim">
-            {result.outcome === 'timeout' ? 'Ran out of time before submitting.' : result.verdict.explanation}
+            {result.verdict.explanation
+              ? `${result.outcome === 'timeout' ? 'Not a usable lie: ' : ''}${result.verdict.explanation}`
+              : 'Ran out of time before submitting.'}
           </p>
           {result.verdict.edit_type && <span className="chip mt-2">{result.verdict.edit_type}</span>}
         </div>

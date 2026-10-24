@@ -36,6 +36,8 @@ import {
   type TracePoint,
 } from '@/lib/api';
 import { wordDiff } from '@/lib/diff';
+
+const norm = (s: string) => s.split(/\s+/).filter(Boolean).join(' ');
 import { readPlayer, signIn, type StoredPlayer } from '@/lib/player';
 import { sound } from '@/lib/sound';
 
@@ -63,7 +65,8 @@ export default function Play() {
   const traceRef = useRef<TracePoint[]>([]);
   const lastTickRef = useRef(0);
   const meterSeqRef = useRef(0);
-  const startedRef = useRef(false);       // React dev mode runs effects twice; start one run
+  const startedRef = useRef(false);
+  const rejectedRef = useRef<Map<string, string>>(new Map());   // this round's not-a-lie edits       // React dev mode runs effects twice; start one run
 
   const round = game?.round ?? null;
   const rules = game?.rules;
@@ -75,6 +78,7 @@ export default function Play() {
     setNotice(null);
     setMeter(null);
     traceRef.current = [];
+    rejectedRef.current = new Map();
     if (state.run.over || !state.round || state.round.status !== 'active') {
       setPhase(state.run.over ? 'over' : 'result');
       return;
@@ -129,6 +133,7 @@ export default function Play() {
       if (res.outcome === 'invalid' && !res.round_over) {
         // The judge ruled it not a lie; try again on the same clock.
         sound.invalid();
+        rejectedRef.current.set(norm(edited), res.verdict.explanation ?? 'Not a lie.');
         setNotice(`${res.verdict.explanation ?? 'Not a lie.'} (${res.attempts_used}/${res.state.rules.max_attempts} tries used)`);
         deadlineRef.current = performance.now() + res.remaining_s * 1000;
         setRemaining(res.remaining_s);
@@ -144,7 +149,7 @@ export default function Play() {
       setResult(res);
       setPhase('result');
     },
-    [],
+    [edited],
   );
 
   const sendTimeout = useCallback(async () => {
@@ -227,6 +232,11 @@ export default function Play() {
     }
     if (changes > rules.max_words) {
       setNotice(`That's ${changes} words — the limit is ${rules.max_words}.`);
+      return;
+    }
+    const before = rejectedRef.current.get(norm(edited));
+    if (before) {
+      setNotice(`You already tried that exact edit — ${before} Change something first.`);
       return;
     }
     const leftAtSubmit = (deadlineRef.current - performance.now()) / 1000;
