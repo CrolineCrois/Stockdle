@@ -136,7 +136,7 @@ export default function Play() {
       if (res.outcome === 'snuck') {
         sound.sneak();
         setConfetti((n) => n + 1);
-      }
+      } else if (res.outcome === 'partial') sound.score(20);
       else if (res.outcome === 'invalid') sound.invalid();
       else sound.caught();
       setResult(res);
@@ -315,6 +315,11 @@ export default function Play() {
                 <span className="label">True headline</span>
                 <span className="chip">{round.headline.source}</span>
                 {round.is_bounty && <span className="chip border-accent/60 text-accent">★ Bounty · 3×</span>}
+                {round.mode === 'breaking' && (
+                  <span className="chip border-crowd/60 text-crowd" title="The source article is hidden from the fact-checker">
+                    Breaking news
+                  </span>
+                )}
                 <span className="chip">
                   try {round.attempts_used + 1}/{round.max_attempts}
                 </span>
@@ -352,7 +357,7 @@ export default function Play() {
                   disabled={phase === 'judging'}
                   onClick={() => void submit()}
                 >
-                  {phase === 'judging' ? 'Judging…' : 'Submit'}
+                  {phase === 'judging' ? 'Judging + checking evidence…' : 'Submit'}
                 </button>
                 <button
                   type="button"

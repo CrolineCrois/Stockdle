@@ -12,7 +12,7 @@ import type { RunInfo } from '@/lib/api';
 export function shareText(run: RunInfo): string {
   return [
     `🕵️ Sneak It Past — ${run.score.toLocaleString()} pts`,
-    `✅ ${run.snuck} snuck past · ❌ ${run.caught} caught · 🔥 best streak ${run.best_streak}`,
+    `✅ ${run.snuck} snuck past · 〰️ ${run.partial} partial · ❌ ${run.caught} caught · 🔥 best streak ${run.best_streak}`,
     `vs detector ${run.detector_version}`,
   ].join('\n');
 }

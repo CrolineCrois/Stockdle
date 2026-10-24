@@ -19,6 +19,7 @@ from app.db import SessionLocal
 from app.models import Headline, Passage
 
 _TOKEN = re.compile(r"[a-z0-9]+")
+MIN_SHARED_IDF = 8.0
 _STOP = {"the", "a", "an", "of", "to", "in", "on", "for", "and", "is", "are", "was", "be",
          "as", "at", "by", "with", "it", "its", "this", "that", "from", "has", "have", "said"}
 
@@ -65,6 +66,9 @@ def retrieve(claim: str, k: int = 3, exclude_headline_id: int | None = None) -> 
         return []
     query = tokens(claim)
     scores = _index.bm25.get_scores(query)
+    idf = _index.bm25.idf
+    # On a tiny corpus (tests, a fresh install) every IDF is small; scale the bar.
+    min_idf = min(MIN_SHARED_IDF, 0.5 * sum(max(0.0, idf.get(t, 0.0)) for t in set(query)))
     ranked = sorted(range(len(scores)), key=lambda i: -scores[i])
     wanted = set(query)
     hits: list[Hit] = []
@@ -72,9 +76,12 @@ def retrieve(claim: str, k: int = 3, exclude_headline_id: int | None = None) -> 
         pid, hid, text = _index.rows[i]
         if exclude_headline_id is not None and hid == exclude_headline_id:
             continue
-        # Require real word overlap rather than a positive score: on a small
-        # corpus BM25's IDF goes negative for common terms and would hide matches.
-        if not wanted & set(tokens(text)):
+        # Relevance by the *rarity* of the shared words, not BM25's raw score
+        # (on a small corpus BM25's IDF goes negative for common terms and would
+        # hide real matches). Sharing only "after" or "death" with a claim is a
+        # coincidence, not evidence; sharing "Starlink" and "Ukraine" is a match.
+        shared = wanted & set(tokens(text))
+        if sum(max(0.0, idf.get(t, 0.0)) for t in shared) < min_idf:
             continue
         hits.append(Hit(pid, hid, text, round(float(scores[i]), 3)))
         if len(hits) >= k:

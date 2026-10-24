@@ -118,7 +118,8 @@ def test_a_valid_lie_is_judged_scored_and_logged(client):
     run = body["state"]["run"]
     if body["outcome"] == "snuck":
         assert body["points"]["total"] > 0 and run["streak"] == 1 and run["lives"] == 3
-        assert body["verifier"]["verdict"] == "supported" and "Misread evidence!" in body["tags"]
+        assert body["verifier"]["verdict"] == "supported"
+        assert ("Misread evidence!" in body["tags"]) == (body["mode"] == "evidence")
     else:
         assert run["lives"] == 2 and run["streak"] == 0
     with SessionLocal() as db:

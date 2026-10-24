@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * The live suspicion meter: the detector's P(false) for the current edit.
- * The needle eases toward each new reading so it swings rather than jumps.
- * Under the line (50%) the edit would sneak past; over it, caught.
+ * The live "first glance" meter: a fast style model's read of the edit as you
+ * type. It does NOT decide the round -- the evidence verifier does, on submit
+ * -- so it is labelled as a hint. The needle eases so it swings, not jumps.
  */
 
 import { motion } from 'framer-motion';
@@ -26,12 +26,12 @@ export default function SuspicionMeter({
   const caught = value !== null && v >= threshold;
   const near = value !== null && !caught && v >= nearFrom;
   const tone = caught ? 'bg-danger' : near ? 'bg-accent' : 'bg-truth';
-  const label = value === null ? 'Edit the headline…' : caught ? 'Would be caught' : near ? 'So close…' : 'Sneaking past';
+  const label = value === null ? 'Edit the headline…' : caught ? 'Looks suspicious' : near ? 'Borderline' : 'Looks fine';
 
   return (
     <div className={shaking ? 'animate-shake' : ''} aria-live="polite">
       <div className="flex items-baseline justify-between">
-        <span className="label">Suspicion</span>
+        <span className="label">First glance</span>
         <span className="text-xs text-chalk-dim">
           {label}
           {pending && <span className="ml-2 text-chalk-faint">…</span>}
@@ -55,6 +55,9 @@ export default function SuspicionMeter({
         <span className="num text-sm font-bold text-chalk">{value === null ? '—' : `${pct}%`}</span>
         <span>looks false</span>
       </div>
+      <p className="mt-1 text-[11px] text-chalk-faint">
+        A quick style read. The real verdict comes from checking the evidence when you submit.
+      </p>
     </div>
   );
 }

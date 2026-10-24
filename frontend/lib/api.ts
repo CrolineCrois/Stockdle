@@ -17,6 +17,7 @@ export interface RunInfo {
   best_streak: number;
   score: number;
   snuck: number;
+  partial: number;
   caught: number;
   rounds_played: number;
   over: boolean;
@@ -34,8 +35,10 @@ export interface HeadlineInfo {
 
 export interface RoundInfo {
   id: string;
-  status: 'active' | 'snuck' | 'caught' | 'timeout' | 'exhausted';
+  status: 'active' | 'snuck' | 'partial' | 'caught' | 'timeout' | 'exhausted';
   is_bounty: boolean;
+  /** "evidence": the source is in the verifier's index; "breaking": it isn't. */
+  mode: 'evidence' | 'breaking';
   timer_start_s: number;
   remaining_s: number;
   attempts_used: number;
@@ -72,13 +75,34 @@ export interface MeterReading {
   remaining_s: number;
 }
 
+/** The judge's two-run ruling. */
 export interface Verdict {
-  is_false: boolean;
-  is_plausible: boolean;
-  is_grammatical: boolean;
+  valid: boolean;
+  reason: string;
+  materiality: number;
+  specificity: number;
+  original_specificity: number;
+  vagueness_flags: string[];
   edit_type: string;
   explanation: string;
   judge: string;
+  runs: unknown[];
+}
+
+export interface EvidencePassage {
+  text: string;
+  source: string;
+  url: string;
+  headline: string;
+  probs: { supported: number; refuted: number; nei: number };
+  decisive: boolean;
+}
+
+export interface VerifierResult {
+  verdict: 'supported' | 'refuted' | 'nei';
+  probs: { supported: number; refuted: number; nei: number };
+  version: string;
+  evidence: EvidencePassage[];
 }
 
 export interface Points {
@@ -88,11 +112,15 @@ export interface Points {
   time_mult: number;
   novelty_mult: number;
   bounty_mult: number;
+  materiality_mult: number;
+  sharp_mult: number;
+  vague_mult: number;
+  partial_mult: number;
   total: number;
   quick_hands: boolean;
 }
 
-export type Outcome = 'snuck' | 'caught' | 'invalid' | 'timeout';
+export type Outcome = 'snuck' | 'partial' | 'caught' | 'invalid' | 'timeout';
 
 export interface SubmitResult {
   outcome: Outcome;
@@ -100,6 +128,9 @@ export interface SubmitResult {
   points: Points | null;
   /** Empty for a timeout: nothing was judged. */
   verdict: Partial<Verdict>;
+  verifier: VerifierResult | null;
+  mode: 'evidence' | 'breaking';
+  tags: string[];
   changes: WordChange[];
   num_changes: number;
   near_miss: boolean;
