@@ -66,7 +66,9 @@ def usable(title: str, snippet: str) -> bool:
 KNOWN_SOURCES = {"bbci.co.uk": "BBC News", "bbc.co.uk": "BBC News", "npr.org": "NPR",
                  "theguardian.com": "The Guardian", "aljazeera.com": "Al Jazeera",
                  "pbs.org": "PBS NewsHour", "cbsnews.com": "CBS News",
-                 "apnews.com": "AP", "reuters.com": "Reuters"}
+                 "apnews.com": "AP", "reuters.com": "Reuters", "dw.com": "DW",
+                 "france24.com": "France 24", "skynews.com": "Sky News",
+                 "abcnews.go.com": "ABC News", "nytimes.com": "The New York Times"}
 
 
 def source_name(feed_url: str, parsed) -> str:

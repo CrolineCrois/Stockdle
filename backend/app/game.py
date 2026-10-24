@@ -49,7 +49,7 @@ from verifier.verify import BREAKING, EVIDENCE, Verification, verify
 
 from . import config, novelty, scoring
 from .diffing import word_diff
-from .models import Attempt, Headline, Player, Round, Run, utcnow
+from .models import Attempt, Headline, Passage, Player, Round, Run, utcnow
 
 
 class GameError(Exception):
@@ -88,9 +88,18 @@ def next_round(db: Session, run: Run) -> Round:
     if active is not None:
         return active                               # idempotent: one live round at a time
 
-    seen = set(db.scalars(select(Round.headline_id).where(Round.run_id == run.id)).all())
-    pool = db.scalars(select(Headline.id).where(Headline.active)).all()
-    choices = [h for h in pool if h not in seen] or list(pool)
+    # Only headlines with evidence fetched: without article text the verifier
+    # could only ever say "not enough info".
+    pool = set(db.scalars(select(Headline.id).where(Headline.active)
+                          .where(Headline.id.in_(select(Passage.headline_id)))).all())
+    if not pool:
+        pool = set(db.scalars(select(Headline.id).where(Headline.active)).all())
+    # Prefer headlines this player has never seen, in any run; then ones not seen
+    # this run; repeat only when the whole pool is used up.
+    seen_ever = set(db.scalars(select(Round.headline_id).join(Run, Run.id == Round.run_id)
+                               .where(Run.player_id == run.player_id)).all())
+    seen_run = set(db.scalars(select(Round.headline_id).where(Round.run_id == run.id)).all())
+    choices = sorted(pool - seen_ever) or sorted(pool - seen_run) or sorted(pool)
     if not choices:
         raise GameError("No headlines loaded yet.", 503)
     headline = db.get(Headline, random.choice(choices))

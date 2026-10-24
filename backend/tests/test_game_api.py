@@ -429,3 +429,12 @@ def test_repeating_a_rejected_edit_costs_nothing_and_auto_skips_the_judge(client
     auto = client.post(f"/api/round/{rid}/submit",
                        json={"player_id": pid, "edited": edit, "auto": True}).json()
     assert auto["outcome"] == "timeout" and auto["verdict"].get("explanation")
+
+
+def test_a_player_is_not_dealt_a_headline_they_have_seen_while_unseen_ones_remain(client):
+    pid = client.post("/api/player", json={"name": "NoRepeats"}).json()["player_id"]
+    seen = []
+    for _ in range(4):                         # four separate runs, one headline each
+        state = client.post("/api/run", json={"player_id": pid}).json()
+        seen.append(state["round"]["headline"]["id"])
+    assert len(set(seen)) == len(seen)

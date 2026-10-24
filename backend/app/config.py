@@ -64,11 +64,34 @@ BOUNTY_FRACTION = _env("SIP_BOUNTY_FRACTION", 0.15)
 
 # --- data ------------------------------------------------------------------
 DEFAULT_FEEDS = ",".join([
+    # world
     "https://feeds.bbci.co.uk/news/world/rss.xml",
     "https://feeds.npr.org/1001/rss.xml",
     "https://www.theguardian.com/world/rss",
     "https://www.aljazeera.com/xml/rss/all.xml",
     "https://www.pbs.org/newshour/feeds/rss/headlines",
+    "https://rss.dw.com/rdf/rss-en-all",
+    "https://www.france24.com/en/rss",
+    "https://feeds.skynews.com/feeds/rss/world.xml",
+    "https://abcnews.go.com/abcnews/internationalheadlines",
+    "https://www.cbsnews.com/latest/rss/world",
+    "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+    # UK / US
+    "https://feeds.bbci.co.uk/news/uk/rss.xml",
+    "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml",
+    "https://www.theguardian.com/uk-news/rss",
+    "https://www.theguardian.com/us-news/rss",
+    "https://feeds.npr.org/1014/rss.xml",
+    # business, science, tech, sport
+    "https://feeds.bbci.co.uk/news/business/rss.xml",
+    "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
+    "https://feeds.bbci.co.uk/news/technology/rss.xml",
+    "https://www.theguardian.com/business/rss",
+    "https://www.theguardian.com/science/rss",
+    "https://www.theguardian.com/technology/rss",
+    "https://www.theguardian.com/sport/rss",
+    "https://feeds.npr.org/1006/rss.xml",
+    "https://feeds.npr.org/1007/rss.xml",
 ])
 FEEDS = [f.strip() for f in _env("SIP_FEEDS", DEFAULT_FEEDS).split(",") if f.strip()]
 
