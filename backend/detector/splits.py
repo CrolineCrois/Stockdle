@@ -3,10 +3,15 @@
 A fixed ~20% of headlines (saved in ``data/detectors/split.json``, extended as
 new headlines arrive) is never trained on by any version, so the synthetic
 test set means the same thing for the stub, v0 and every patch.
+
+Of the rest, a stable ~15% is the *validation* slice: not trained on either,
+used only to set each version's calibration threshold (see transformer.py), so
+the test set never influences anything that ships.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 
@@ -45,3 +50,17 @@ def synthetic_examples(db, heads: list[Headline], generator: str | None = None):
         pairs.append((f.text, by_id[f.headline_id].snippet))
         labels.append(1)
     return pairs, labels
+
+
+def is_validation(headline_id: int) -> bool:
+    h = int(hashlib.sha1(f"val-{headline_id}".encode()).hexdigest()[:8], 16)
+    return (h % 1000) < 150
+
+
+def train_val_test(heads: list[Headline]) -> tuple[list[Headline], list[Headline], list[Headline]]:
+    test_ids = load_split(heads)
+    test = [h for h in heads if h.id in test_ids]
+    rest = [h for h in heads if h.id not in test_ids]
+    val = [h for h in rest if is_validation(h.id)]
+    train = [h for h in rest if not is_validation(h.id)]
+    return train, val, test

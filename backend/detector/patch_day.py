@@ -40,7 +40,7 @@ from app.models import Attempt, DetectorVersion, Headline
 
 from . import registry
 from .bounties import refresh as refresh_bounties
-from .evaluate import catch_rate, metrics
+from .evaluate import catch_rate, metrics, ship_check
 
 MIN_EXPLOITS = 5
 HOLDOUT_FRACTION = 0.2
@@ -86,14 +86,19 @@ def run(*, include_mock: bool = False, dry_run: bool = False, epochs: int = 4,
                     f"(need {min_exploits})", "exploits": len(pool)}
 
         # Exploits + their originals (the matched true set) + v0's synthetic data.
+        from .splits import synthetic_examples, train_val_test
+        train_h, val_h, test_h = train_val_test(heads)
+        test_ids = {h.id for h in test_h}
+        val_true = [(h.text, h.snippet) for h in val_h]
+        # Exploits are human data and always train; their original headline joins
+        # the true set only if it isn't a held-out test/validation headline.
+        held = test_ids | {h.id for h in val_h}
         pairs = [(a.edited_headline, h.snippet) for a, h in train]
         labels = [1] * len(train)
-        pairs += [(h.text, h.snippet) for _, h in train]
-        labels += [0] * len(train)
-        from .splits import load_split, synthetic_examples
-        test_ids = load_split(heads)
-        syn_pairs, syn_labels = synthetic_examples(
-            db, [h for h in heads if h.id not in test_ids])
+        originals = {h.id: h for _, h in train if h.id not in held}
+        pairs += [(h.text, h.snippet) for h in originals.values()]
+        labels += [0] * len(originals)
+        syn_pairs, syn_labels = synthetic_examples(db, train_h)
         pairs += syn_pairs
         labels += syn_labels
         syn_test = synthetic_examples(db, [h for h in heads if h.id in test_ids])
@@ -104,9 +109,10 @@ def run(*, include_mock: bool = False, dry_run: bool = False, epochs: int = 4,
 
     log(f"[patch] {name}: {len(train)} exploits to learn, {len(hold)} held out, "
         f"{len(labels)} training pairs, starting from {current_name}")
-    if current_kind == "distilbert":
-        from .distil import finetune
+    if current_kind in ("transformer", "distilbert"):
+        from .transformer import finetune
         det = finetune(name, current_path, pairs, labels, epochs=epochs, log=log)
+        det.fit_threshold(val_true)          # recalibrate: the 50% line keeps its meaning
     else:
         from .baseline import BaselineDetector
         det = BaselineDetector.train(name, pairs, labels)
@@ -126,6 +132,13 @@ def run(*, include_mock: bool = False, dry_run: bool = False, epochs: int = 4,
     log(f"[patch] {json.dumps(report)}")
     if dry_run:
         return {"shipped": False, "reason": "dry run", "name": name, **report}
+    # Judge the patch on synthetic fakes + true headlines together; a patch that
+    # starts flagging everything must not go live.
+    gate = metrics(det, syn_test[0] + true_pairs, syn_test[1] + [0] * len(true_pairs))
+    ok, why = ship_check(gate)
+    if not ok:
+        log(f"[patch] {name} NOT shipped: {why}")
+        return {"shipped": False, "reason": why, "name": name, **report}
 
     path = det.save(config.DETECTOR_DIR / name)
     note = (f"patch day: +{len(train)} human exploits on top of {current_name}"

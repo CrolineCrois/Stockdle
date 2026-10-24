@@ -21,7 +21,7 @@ from .base import JudgeUnavailable
 ORIGINAL = "Storm Boelo to bring 80mph gusts and heavy rain to parts of UK"
 SNIPPET = "Second named storm will hit northern parts of the UK as thousands remain without power."
 SAMPLES = [
-    ("a lie (should be is_false=true)", "Storm Boelo to bring 180mph gusts and heavy rain to parts of UK"),
+    ("a believable lie (should be is_false=true, plausible=true)", "Storm Boelo to bring 95mph gusts and heavy rain to parts of UK"),
     ("a rewording (should be is_false=false)", "Storm Boelo set to bring 80mph gusts and heavy rain to parts of UK"),
 ]
 

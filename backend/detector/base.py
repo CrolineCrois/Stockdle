@@ -7,7 +7,7 @@ from typing import Protocol
 
 class Detector(Protocol):
     name: str      # version name, e.g. "stub", "v0", "v1"
-    kind: str      # "baseline" | "distilbert"
+    kind: str      # "baseline" | "transformer"
 
     def predict(self, pairs: list[tuple[str, str]]) -> list[float]:
         """P(false) for each (headline, snippet) pair."""

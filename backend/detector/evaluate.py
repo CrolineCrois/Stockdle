@@ -37,3 +37,22 @@ def catch_rate(det: Detector, pairs: list[tuple[str, str]]) -> float | None:
     if not pairs:
         return None
     return round(sum(p >= config.SNEAK_THRESHOLD for p in det.predict(pairs)) / len(pairs), 4)
+
+
+# A version only goes live if it beats these on held-out data. Training can
+# collapse (e.g. call everything false): that catches every fake but makes the
+# game unwinnable, so "catch rate" alone must never be the bar.
+MIN_AUC = 0.6
+MAX_FALSE_ALARM = 0.5
+
+
+def ship_check(m: dict) -> tuple[bool, str]:
+    """Is a held-out ``metrics()`` result good enough to make a version live?"""
+    auc, fa = m.get("auc"), m.get("false_alarm_rate")
+    if auc is None or fa is None:
+        return False, "no held-out fakes and true headlines to check it on"
+    if auc < MIN_AUC:
+        return False, f"held-out AUC {auc} < {MIN_AUC} (it isn't telling true from false)"
+    if fa >= MAX_FALSE_ALARM:
+        return False, f"flags {fa:.0%} of true headlines (>= {MAX_FALSE_ALARM:.0%}); unplayable"
+    return True, "ok"

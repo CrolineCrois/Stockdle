@@ -106,3 +106,123 @@ Analytics dashboard addition:
 - Ask me any clarifying questions before starting.
 - Keep the code simple and well-commented; teammates will be reading it.
 - Write a seed script so the game works with a small sample of headlines even before scraping is set up.
+
+
+# Update: Sneak It Past — project focus, detector redesign, anti-loophole scoring, and evaluation plan
+
+This update REPLACES the earlier "detector" design and adds new judge rules, scoring, and a rigorous evaluation plan. Read it fully, tell me which existing code needs to change, then implement. The evaluation plan is as important as the game: we must be able to show judges a measurable, honest result.
+
+## Project focus (put this at the top of the README)
+We are NOT building a general "detect all misinformation" model. A text-only detector can't check facts, and subtle edits don't change a headline's style, so style alone isn't enough.
+
+Our detector is a search-backed fact-checker. Search finds evidence, but fact-checking models often misread that evidence: numbers, swapped roles (who did what to whom), cause vs. correlation, time shifts, negation, and quantifiers. Players try to write false headlines that the fact-checker wrongly marks as SUPPORTED. Every win is a real fact-checker failure.
+
+The game produces:
+1. A dataset of human-found fact-checker failure modes
+2. A verifier that improves on them through retraining
+3. A controlled comparison showing whether human-found failures teach the model more than LLM-generated ones
+
+## Two game modes
+- Evidence mode (default): the retrieval index includes the source article. A player win means the verifier misread available evidence.
+- Breaking news mode: the source article is excluded from retrieval, simulating a story with no coverage yet. Use this for bounty headlines. Track mode in every log row.
+
+## Detector architecture (two parts)
+1. Evidence verifier — decides the round:
+   - Retrieval over our scraped article corpus (start with BM25; optionally hybrid with sentence-transformer embeddings). Return top-k passages (k configurable, default 3).
+   - Verification with a small NLI / fact-verification model (e.g., a DeBERTa-v3 model fine-tuned on MNLI/FEVER-style data from Hugging Face) that takes (claim, evidence passages) and outputs probabilities for SUPPORTED / REFUTED / NOT ENOUGH INFO.
+   - Runs on submit, not on every keystroke.
+2. Style model — live meter only:
+   - The existing fast small classifier keeps powering the live suspicion meter while typing, for game feel.
+   - It does NOT decide outcomes. Label the meter in the UI as a "first glance" signal, and reveal the evidence verifier's verdict on submit.
+
+## Outcomes (replace old snuck/caught logic)
+After the judge validates the edit (see below):
+- Verifier says SUPPORTED → SNUCK PAST (full points)
+- Verifier says NOT ENOUGH INFO → PARTIAL (0.3x points, streak continues but doesn't grow)
+- Verifier says REFUTED → CAUGHT (lose a life, reset streak)
+On reveal, show the evidence passages the verifier used, so players learn why they were caught.
+
+## Judge upgrades (anti-loophole)
+Extend the judge's JSON output:
+{
+  "is_false": bool,
+  "is_grammatical": bool,
+  "is_plausible": bool,
+  "materiality": 1-5,   // would a normal reader come away believing something false AND meaningful?
+  "specificity": 1-5,   // is the edited claim as concrete and checkable as the original?
+  "vagueness_flags": [string], // e.g. "added hedge: may", "number replaced with 'many'", "attributed to unnamed sources"
+  "edit_type": one of ["number", "role swap", "causal", "temporal", "negation", "quantifier", "entity swap", "other"],
+  "explanation": string
+}
+Rules:
+- Write the judge prompt with an explicit rubric and examples of: pedantic edits (e.g. "the" → "a" with no real meaning change → materiality 1), material edits (e.g. "for" → "against" → materiality 5), vague edits (e.g. "52–48" → "narrowly", adding "may", "reportedly", "some say" → low specificity), and sharp edits (precise but wrong number or swapped name → high specificity).
+- Run the judge twice (two different prompt phrasings). Both must agree that is_false is true. If they disagree, treat the edit as invalid.
+- Materiality < 3 → invalid ("Too pedantic"), no points, no life lost.
+- Specificity lower than the original by 2 or more, OR any vagueness flag → "Too vague": points × 0.5, or count it as CAUGHT if specificity ≤ 2.
+
+## Scoring additions
+Apply alongside the existing word, streak, time, novelty, and bounty multipliers:
+- Materiality multiplier: 3 → 1x, 4 → 1.25x, 5 → 1.5x
+- Specificity: kept equal to the original and specificity ≥ 4 → "Sharp lie" ×1.5
+- Vagueness penalty as above
+Show tags after each submit, e.g. "Sharp lie ×1.5", "Too vague −50%", "Too pedantic", "Misread evidence!" (on SNUCK PAST in evidence mode).
+
+## Human review before retraining
+- Add a simple admin review page listing successful exploits with original headline, edited headline, judge output, and evidence passages. Reviewers mark each approve / reject.
+- Only approved exploits go into training or evaluation sets. Log reviewer decisions so we can measure judge accuracy.
+
+## Data collection timeline (important — data volume is our biggest risk)
+- As soon as the MVP is playable end to end, the team and friends start playing. Do not wait for polish.
+- Target: at least 150 approved exploits before the first patch day.
+- Run one patch day around the midpoint of the hackathon, then keep collecting so we can evaluate on fresh exploits.
+- Add a simple counter on the admin page: attempts, judge-valid exploits, approved exploits, broken down by edit_type.
+
+## Evaluation plan (build this as a script + dashboard section)
+
+### Data splits
+- Split approved exploits into train / test BY HEADLINE (no headline appears in both), ~70/30. Fix the random seed and save the split to disk so results are reproducible.
+- Also hold out a set of TRUE headlines (unedited) with their evidence, never used in training, to measure false positives.
+- Exploits collected after the patch day form an extra "fresh" test set.
+
+### Models to compare (same base model, same training settings, same number of training examples)
+1. v0: off-the-shelf verifier, no fine-tuning.
+2. v1-synthetic (CONTROL): fine-tuned on LLM-generated tricky edits. Generate these with the Anthropic API by asking for minimal, material, specific false edits of the SAME training headlines, matched to the same edit_type distribution as the human exploits. Run them through the same judge filters. Use the same count as the human training set.
+3. v1-human: fine-tuned on approved human exploits (labeled REFUTED) plus matched true headlines (labeled SUPPORTED) with their retrieved evidence.
+4. (Optional) v1-combined: human + synthetic.
+
+### Test sets
+- Held-out human exploits (the main test)
+- Held-out true headlines (false-positive check)
+- Fresh post-patch exploits (if enough collected)
+- External benchmark: a sample of VitaminC (a public fact-verification dataset built from minimal contrastive edits; load from Hugging Face). Use it to check that improvements generalize and the model doesn't get worse on standard data. Optionally also a FEVER sample.
+
+### Metrics
+- Refute recall on held-out exploits (how many lies are caught)
+- False positive rate on true headlines (how many truths are wrongly refuted)
+- Macro-F1 / accuracy on VitaminC
+- All of the above broken down by edit_type
+- Report every number with 95% bootstrap confidence intervals (1,000 resamples), since our sample sizes are small.
+
+### The key claims to test
+- Finding: which edit types the verifier misses most, even with evidence retrieved.
+- Improvement: v1-human vs. v0.
+- Main result: v1-human vs. v1-synthetic. Does human-found data teach something LLM-generated data doesn't?
+- Sanity: no large jump in false positives, no drop on VitaminC.
+Report honestly even if results are small or negative.
+
+## Patch days (update)
+- Retrain the EVIDENCE VERIFIER (not just the style model) as v1-human for the live game.
+- Keep every model version and its eval results.
+- Players get a "your exploit was patched" notification when the new version catches an exploit they found.
+
+## Logging (add fields)
+mode, retrieved_passage_ids, verifier_probs (supported/refuted/nei), verifier_verdict, judge_outputs (both runs), materiality, specificity, vagueness_flags, edit_type, review_status, reviewer_id, split (train/test/fresh), verifier_version.
+
+## Dashboard (add charts)
+- Verifier failure rate by edit_type (key finding)
+- Evidence mode vs. breaking news mode win rates
+- Model comparison table and bar chart: v0 vs. v1-synthetic vs. v1-human (vs. v1-combined) on each test set, with confidence intervals
+- False-positive rate by version
+- VitaminC score by version
+- Judge accuracy vs. human review
+- Data progress: approved exploits over time, by edit_type

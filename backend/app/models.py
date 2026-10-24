@@ -156,7 +156,7 @@ class DetectorVersion(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(20), unique=True)    # "stub", "v0", "v1"...
-    kind: Mapped[str] = mapped_column(String(20))                 # "baseline" | "distilbert"
+    kind: Mapped[str] = mapped_column(String(20))                 # "baseline" | "transformer"
     path: Mapped[str] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     is_current: Mapped[bool] = mapped_column(Boolean, default=False, index=True)

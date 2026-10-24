@@ -32,9 +32,9 @@ def _load_row(row: DetectorVersion) -> Detector:
     if row.kind == "baseline":
         from .baseline import BaselineDetector
         return BaselineDetector.load(row.name, Path(row.path))
-    if row.kind == "distilbert":
-        from .distil import DistilDetector  # phase 2; needs requirements-optional.txt
-        return DistilDetector.load(row.name, Path(row.path))
+    if row.kind in ("transformer", "distilbert"):   # "distilbert": versions saved before the rename
+        from .transformer import TransformerDetector  # needs requirements-optional.txt
+        return TransformerDetector.load(row.name, Path(row.path))
     raise ValueError(f"unknown detector kind {row.kind!r}")
 
 

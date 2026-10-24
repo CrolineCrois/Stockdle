@@ -260,9 +260,12 @@ def test_patch_day_ignores_mock_judged_exploits_by_default(client):
 
 def test_patch_day_ships_a_version_and_notifies_players(client):
     from detector import patch_day
+    from ingest.make_fakes import generate
+    generate(use_rules=True)                 # the ship gate needs held-out fakes to check against
     pid = _fake_exploits(20)
     result = patch_day.run(min_exploits=5, log=lambda *_: None)
-    assert result["shipped"] and result["name"].startswith("v")
+    assert result["shipped"], result.get("reason")
+    assert result["name"].startswith("v")
     assert registry.current_name() == result["name"]
     assert result["holdout_catch_after"] is None or 0 <= result["holdout_catch_after"] <= 1
     assert client.get("/api/health").json()["detector"] == result["name"]

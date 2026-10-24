@@ -40,3 +40,12 @@ def test_set_current_switches_the_live_version(tmp_path):
     assert registry.current_name() == "vtest-a"
     names = [v.name for v in registry.versions()]
     assert "vtest-a" in names and "vtest-b" in names
+
+
+def test_ship_check_rejects_collapsed_and_useless_models():
+    from detector.evaluate import ship_check
+    assert ship_check({"auc": 0.82, "false_alarm_rate": 0.22})[0]
+    assert not ship_check({"auc": 0.52, "false_alarm_rate": 1.0})[0]      # calls everything false
+    assert not ship_check({"auc": 0.55, "false_alarm_rate": 0.1})[0]      # coin flip
+    assert not ship_check({"auc": 0.9, "false_alarm_rate": 0.6})[0]       # unplayable
+    assert not ship_check({"n": 0})[0]

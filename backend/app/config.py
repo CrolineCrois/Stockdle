@@ -83,8 +83,10 @@ SUSPICION_RATE_PER_S = _env("SIP_SUSPICION_RATE_PER_S", 8.0)   # live-meter call
 # --- detector training (phase 2+) -------------------------------------------
 # The LLM that writes v0's training fakes. Only used when an API key is set.
 FAKES_MODEL = _env("SIP_FAKES_MODEL", "claude-opus-5-5")
-DETECTOR_BASE_MODEL = _env("SIP_DETECTOR_BASE", "distilbert-base-uncased")
-DETECTOR_MAX_LEN = _env("SIP_DETECTOR_MAX_LEN", 128)
+# A small NLI cross-encoder (premise = snippet, claim = headline); any 2-label
+# classifier such as distilbert-base-uncased also works. See detector/transformer.py.
+DETECTOR_BASE_MODEL = _env("SIP_DETECTOR_BASE", "cross-encoder/nli-deberta-v3-xsmall")
+DETECTOR_MAX_LEN = _env("SIP_DETECTOR_MAX_LEN", 160)
 
 # --- OpenAI as an alternative provider ---------------------------------------
 # Used for the judge and for v0's training fakes when OPENAI_API_KEY is set and
