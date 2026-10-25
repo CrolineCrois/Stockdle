@@ -79,6 +79,9 @@ class Run(Base):
     caught: Mapped[int] = mapped_column(Integer, default=0)
     rounds_played: Mapped[int] = mapped_column(Integer, default=0)
     detector_version: Mapped[str] = mapped_column(String(20), default="")
+    # The fact-checker version this run plays against (a "level"). "" = runs from
+    # before levels existed: the live version at the time.
+    level: Mapped[str] = mapped_column(String(30), default="", index=True)
 
 
 class Round(Base):

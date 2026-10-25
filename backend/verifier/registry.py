@@ -85,6 +85,23 @@ def register(name: str, path: str, *, train_data: str, n_train: int, metrics: di
         _current = name
 
 
+def levels() -> list[VerifierVersion]:
+    """Playable versions, oldest (easiest) first: the off-the-shelf v0 and every
+    patch-day model whose files are on disk. Evaluation models are not levels."""
+    from pathlib import Path
+    ensure_v0()
+    with SessionLocal() as db:
+        rows = db.scalars(select(VerifierVersion).where(VerifierVersion.train_data.in_(("none", "human")))
+                          .order_by(VerifierVersion.created_at)).all()
+        db.expunge_all()
+    return [r for r in rows if r.name == "v0" or Path(r.path).exists()]
+
+
+def newest_level() -> str:
+    """The hardest level: the live version."""
+    return current_name()
+
+
 def set_current(name: str) -> None:
     global _current
     with SessionLocal() as db:

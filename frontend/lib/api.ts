@@ -22,6 +22,8 @@ export interface RunInfo {
   rounds_played: number;
   over: boolean;
   detector_version: string;
+  /** The fact-checker version this run plays against. */
+  level: string;
 }
 
 export interface HeadlineInfo {
@@ -149,6 +151,7 @@ export interface TracePoint {
 }
 
 export interface LeaderRow {
+  level?: string;
   rank: number;
   name: string;
   score: number;
@@ -194,7 +197,7 @@ export const api = {
   upsertPlayer: (name: string, playerId?: string | null) =>
     post<PlayerInfo>('/api/player', { name, player_id: playerId ?? null }),
 
-  startRun: (playerId: string) => post<GameState>('/api/run', { player_id: playerId }),
+  startRun: (playerId: string, level?: string) => post<GameState>('/api/run', { player_id: playerId, level }),
 
   nextRound: (runId: string, playerId: string) =>
     post<GameState>(`/api/run/${runId}/next`, { player_id: playerId }),
@@ -224,6 +227,8 @@ export const api = {
 };
 
 export interface ExploitRow {
+  level?: string;
+  newest?: boolean;
   id: number;
   player: string;
   original: string;
@@ -328,6 +333,8 @@ export const analyticsApi = {
 };
 
 export interface ReviewItem {
+  level?: string;
+  newest?: boolean;
   id: number;
   created_at: string;
   outcome: 'snuck' | 'partial';
@@ -414,6 +421,22 @@ export interface LearningSummary {
   meter: LearningVersion[];
   live: { version: string; caught: CI }[];
 }
+
+export interface LevelInfo {
+  name: string;
+  number: number;
+  newest: boolean;
+  n_train: number;
+  note: string;
+  created_at: string;
+  points_mult: number;
+  held_out_caught: CI | null;
+  live_caught: CI | null;
+}
+
+export const levelsApi = {
+  list: () => request<{ levels: LevelInfo[]; newest: string }>('/api/levels'),
+};
 
 export const learningApi = {
   get: () => request<LearningSummary>('/api/learning'),

@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import Confetti from '@/components/Confetti';
 import HeadlineEditor from '@/components/HeadlineEditor';
+import LevelPicker from '@/components/LevelPicker';
 import Nav from '@/components/Nav';
 import OutcomeCard from '@/components/OutcomeCard';
 import ShareCard from '@/components/ShareCard';
@@ -29,7 +30,9 @@ import TimerBar from '@/components/TimerBar';
 import {
   ApiError,
   api,
+  levelsApi,
   noticesApi,
+  type LevelInfo,
   type GameState,
   type MeterReading,
   type SubmitResult,
@@ -41,7 +44,15 @@ const norm = (s: string) => s.split(/\s+/).filter(Boolean).join(' ');
 import { readPlayer, signIn, type StoredPlayer } from '@/lib/player';
 import { sound } from '@/lib/sound';
 
-type Phase = 'loading' | 'editing' | 'judging' | 'result' | 'over' | 'error';
+type Phase = 'loading' | 'levels' | 'editing' | 'judging' | 'result' | 'over' | 'error';
+const LEVEL_KEY = 'sip-level';
+const savedLevel = () => {
+  try {
+    return window.localStorage.getItem(LEVEL_KEY);
+  } catch {
+    return null;
+  }
+};
 const METER_DEBOUNCE_MS = 450;   // long enough that half-typed words aren't scored
 
 export default function Play() {
@@ -59,6 +70,7 @@ export default function Play() {
   const [muted, setMuted] = useState(false);
   const [confetti, setConfetti] = useState(0);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [levels, setLevels] = useState<LevelInfo[]>([]);
 
   const deadlineRef = useRef(0);          // performance.now() at which the clock hits 0
   const roundShownRef = useRef(0);        // performance.now() when the headline appeared
@@ -117,9 +129,20 @@ export default function Play() {
             })));
           })
           .catch(() => undefined);
-        return api.startRun(p.player_id);
+        // More than one fact-checker version: let the player pick a level.
+        return levelsApi
+          .list()
+          .catch(() => ({ levels: [] as LevelInfo[], newest: '' }))
+          .then(({ levels: lv }) => {
+            setLevels(lv);
+            if (lv.length > 1) {
+              setPhase('levels');
+              return null;
+            }
+            return api.startRun(p.player_id);
+          });
       })
-      .then(beginRound)
+      .then((state) => state && beginRound(state))
       .catch((e) => {
         setError(e instanceof Error ? e.message : 'Could not start a run.');
         setPhase('error');
@@ -270,11 +293,35 @@ export default function Play() {
     }
   }, [player, game, beginRound]);
 
+  const startLevel = useCallback(
+    async (level?: string) => {
+      if (!player) return;
+      if (level) {
+        try {
+          window.localStorage.setItem(LEVEL_KEY, level);
+        } catch {
+          /* private mode: no memory of the last level */
+        }
+      }
+      setPhase('loading');
+      try {
+        beginRound(await api.startRun(player.player_id, level));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not start a run.');
+        setPhase('error');
+      }
+    },
+    [player, beginRound],
+  );
+
   const playAgain = useCallback(async () => {
-    if (!player) return;
-    setPhase('loading');
-    beginRound(await api.startRun(player.player_id));
-  }, [player, beginRound]);
+    if (levels.length > 1) {
+      levelsApi.list().then(({ levels: lv }) => setLevels(lv)).catch(() => undefined);
+      setPhase('levels');
+      return;
+    }
+    await startLevel();
+  }, [levels.length, startLevel]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -294,6 +341,7 @@ export default function Play() {
         {'♥'.repeat(Math.max(0, run.lives))}
         <span className="text-chalk-faint">{'♥'.repeat(Math.max(0, run.max_lives - run.lives))}</span>
       </span>
+      {levels.length > 1 && run.level && <span className="chip num text-chalk-dim">vs {run.level}</span>}
       {run.streak > 0 && <span className="chip text-accent">🔥 {run.streak}</span>}
       <span className="chip num text-chalk">{run.score.toLocaleString()}</span>
       <button
@@ -326,6 +374,10 @@ export default function Play() {
               Back to start
             </button>
           </div>
+        )}
+
+        {phase === 'levels' && (
+          <LevelPicker levels={levels} last={savedLevel()} onPick={(name) => void startLevel(name)} />
         )}
 
         {phase === 'loading' && <p className="pt-10 text-center text-sm text-chalk-dim">Dealing a headline…</p>}
@@ -406,7 +458,7 @@ export default function Play() {
             <ShareCard run={run} />
             <div className="mt-5 flex flex-wrap justify-center gap-3">
               <button type="button" className="btn-primary" onClick={() => void playAgain()}>
-                Play again
+                {levels.length > 1 ? 'Play again / change level' : 'Play again'}
               </button>
               <button type="button" className="btn-ghost" onClick={() => router.push('/board')}>
                 Exploit Board

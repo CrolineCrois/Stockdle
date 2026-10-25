@@ -501,3 +501,20 @@ def test_new_players_are_limited_per_network(client, monkeypatch):
     codes = [client.post("/api/player", json={"name": f"Ip{i}"}, headers=h).status_code for i in range(3)]
     assert codes == [200, 200, 429]
     assert client.post("/api/player", json={"name": "Other"}, headers={"cf-connecting-ip": "203.0.113.10"}).status_code == 200
+
+
+def test_levels_and_playing_an_older_level(client):
+    body = client.get("/api/levels").json()
+    names = [lv["name"] for lv in body["levels"]]
+    assert names and names[0] == "v0" and body["newest"] in names
+    pid = client.post("/api/player", json={"name": "Leveller"}).json()["player_id"]
+    state = client.post("/api/run", json={"player_id": pid, "level": "v0"}).json()
+    assert state["run"]["level"] == "v0"
+    assert client.post("/api/run", json={"player_id": pid, "level": "nope"}).status_code == 422
+
+
+def test_level_multiplier_halves_per_older_version(monkeypatch):
+    from types import SimpleNamespace as NS
+    from app import game
+    monkeypatch.setattr(game.verifiers, "levels", lambda: [NS(name="v0"), NS(name="v1-human"), NS(name="v2-human")])
+    assert [game.level_mult(n) for n in ("v2-human", "v1-human", "v0")] == [1.0, 0.5, 0.25]

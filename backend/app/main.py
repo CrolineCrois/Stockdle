@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from detector import registry
+from verifier import registry as verifiers
 from judge import get_judge
 
 from . import analytics, config, game, review
@@ -46,6 +47,7 @@ from .schemas import (
     EditIn,
     PlayerIn,
     PlayerRef,
+    RunIn,
     SubmitIn,
     TimeoutIn,
     player_out,
@@ -172,9 +174,9 @@ def upsert_player(body: PlayerIn, request: Request, db: Session = Depends(get_se
 
 
 @app.post("/api/run")
-def start_run(body: PlayerRef, db: Session = Depends(get_session)) -> dict:
+def start_run(body: RunIn, db: Session = Depends(get_session)) -> dict:
     player = _player(db, body.player_id)
-    run, _ = _game_errors(lambda: game.start_run(db, player))
+    run, _ = _game_errors(lambda: game.start_run(db, player, body.level))
     db.commit()
     return _state(db, run)
 
@@ -202,10 +204,10 @@ def live_suspicion(round_id: str, body: EditIn, db: Session = Depends(get_sessio
     """The live meter. Cheap by design: detector only, no judge, nothing logged."""
     _meter_rate_limit(body.player_id)
     player = _player(db, body.player_id)
-    rnd, _, headline = _round(db, round_id, player)
+    rnd, run, headline = _round(db, round_id, player)
     diff = word_diff(headline.text, body.edited)
     return {
-        "suspicion": game.suspicion(headline, body.edited),
+        "suspicion": game.suspicion(headline, body.edited, game.level_of(run)),
         "num_changes": diff.num_changes,
         "changes": diff.changed_words,
         "over_limit": diff.num_changes > config.MAX_WORD_CHANGES,
@@ -277,13 +279,32 @@ def timeout(round_id: str, body: TimeoutIn, db: Session = Depends(get_session)) 
     return _result_out(db, res, run)
 
 
+@app.get("/api/levels")
+def levels(db: Session = Depends(get_session)) -> dict:
+    """Every fact-checker version as a playable level, easiest first."""
+    from app.learning import live_by_verifier
+    live = {x["version"]: x["caught"] for x in live_by_verifier(db)}
+    rows, newest = verifiers.levels(), verifiers.newest_level()
+    out = []
+    for i, v in enumerate(rows):
+        bench = json.loads(v.metrics_json or "{}").get("benchmark") or {}
+        out.append({"name": v.name, "number": i, "newest": v.name == newest,
+                    "n_train": v.n_train, "note": v.note,
+                    "created_at": v.created_at.isoformat() + "Z",
+                    "points_mult": game.level_mult(v.name),
+                    "held_out_caught": bench.get("human_lies_caught"),
+                    "live_caught": live.get(v.name)})
+    return {"levels": out, "newest": newest}
+
+
 @app.get("/api/leaderboard")
 def leaderboard(db: Session = Depends(get_session)) -> dict:
     rows = db.execute(
         select(Run, Player.name).join(Player, Player.id == Run.player_id)
         .where(Run.score > 0).order_by(Run.score.desc()).limit(25)).all()
     return {"rows": [{"rank": i + 1, "name": name, "score": r.score, "snuck": r.snuck,
-                      "best_streak": r.best_streak, "detector_version": r.detector_version}
+                      "best_streak": r.best_streak, "detector_version": r.detector_version,
+                      "level": game.level_of(r)}
                      for i, (r, name) in enumerate(rows)]}
 
 
@@ -299,16 +320,20 @@ def exploit_board(limit: int = 20, db: Session = Depends(get_session)) -> dict:
     share path for them outside the game.
     """
     limit = max(1, min(limit, 50))
+    newest = verifiers.newest_level()
+    # Exploits against the newest fact-checker first; older levels still listed.
     rows = db.execute(
         select(Attempt, Player.name).join(Player, Player.id == Attempt.player_id)
         .where(Attempt.outcome == "snuck", Attempt.is_novel)
-        .order_by(Attempt.points.desc()).limit(limit)).all()
+        .order_by((Attempt.verifier_version == newest).desc(), Attempt.points.desc())
+        .limit(limit)).all()
     return {"label": FAKE_LABEL, "rows": [{
         "id": a.id, "player": name, "original": a.original_headline,
         "edited": a.edited_headline, "label": FAKE_LABEL, "edit_type": a.edit_type,
         "changes": a.changed_words, "points": a.points,
         "suspicion": a.suspicion_score_final, "novelty_distance": a.novelty_distance,
         "detector_version": a.detector_version, "patched_in": a.patched_in,
+        "level": a.verifier_version or "v0", "newest": (a.verifier_version or "v0") == newest,
         "created_at": a.created_at.isoformat() + "Z",
     } for a, name in rows]}
 

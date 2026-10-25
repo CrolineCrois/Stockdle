@@ -61,6 +61,7 @@ class Points:
     partial_mult: float
     total: int
     quick_hands: bool
+    level_mult: float = 1.0      # older (easier) fact-checker levels score less
 
     def to_dict(self) -> dict:
         return asdict(self)

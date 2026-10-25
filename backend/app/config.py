@@ -44,6 +44,8 @@ JUDGE_TIMEOUT_S = _env("SIP_JUDGE_TIMEOUT_S", 30.0)
 
 # --- the game --------------------------------------------------------------
 LIVES = _env("SIP_LIVES", 3)
+# Points multiplier per level below the newest fact-checker (older = easier).
+LEVEL_STEP_MULT = _env("SIP_LEVEL_STEP_MULT", 0.5)
 # Tries per headline; 0 = unlimited while the clock runs (the default).
 MAX_ATTEMPTS = _env("SIP_MAX_ATTEMPTS", 0)
 # Unlimited tries still cost a judge call each: at least this long between submits.

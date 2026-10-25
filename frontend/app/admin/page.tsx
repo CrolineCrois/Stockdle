@@ -204,6 +204,12 @@ export default function Admin() {
                 <span className="chip border-danger/60 bg-danger/10 font-bold text-danger">{label}</span>
                 <span className="chip">{x.outcome}</span>
                 <span className="chip">{x.mode}</span>
+                {x.level && (
+                  <span className={`chip num ${x.newest ? 'border-accent/50 text-accent' : ''}`}>
+                    vs {x.level}
+                    {x.newest ? ' · newest' : ''}
+                  </span>
+                )}
                 <span className="chip">{x.edit_type}</span>
                 <span className="chip">
                   materiality {x.materiality ?? '—'} · specificity {x.original_specificity ?? '—'}→{x.specificity ?? '—'}

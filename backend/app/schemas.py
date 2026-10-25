@@ -25,6 +25,10 @@ class PlayerRef(BaseModel):
     player_id: str = Field(min_length=1, max_length=40)
 
 
+class RunIn(PlayerRef):
+    level: str | None = Field(default=None, max_length=30)   # fact-checker version
+
+
 class EditIn(PlayerRef):
     edited: str = Field(min_length=1, max_length=300)
 
@@ -57,7 +61,13 @@ def run_out(run: Run) -> dict:
             "streak": run.streak, "best_streak": run.best_streak, "score": run.score,
             "snuck": run.snuck, "partial": run.partial, "caught": run.caught,
             "rounds_played": run.rounds_played,
-            "over": run.ended_at is not None, "detector_version": run.detector_version}
+            "over": run.ended_at is not None, "detector_version": run.detector_version,
+            "level": run.level or _newest()}
+
+
+def _newest() -> str:
+    from verifier.registry import newest_level
+    return newest_level()
 
 
 def round_out(rnd: Round, headline: Headline) -> dict:

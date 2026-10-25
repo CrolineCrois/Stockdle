@@ -39,8 +39,8 @@ export default function Board() {
         <p className="label">Zero-day exploits</p>
         <h1 className="mt-1 text-4xl font-black tracking-tight">Exploit Board</h1>
         <p className="mt-2 text-sm text-chalk-dim">
-          Tricks unlike any that came before them, which slipped past the detector. Each one is
-          training data for the next patch day.
+          Tricks unlike any that came before them, which slipped past the fact-checker. Exploits against
+          the newest version come first; older levels follow. Each one is training data for the next patch day.
         </p>
         {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
@@ -52,6 +52,12 @@ export default function Board() {
             <article key={x.id} className="panel p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="chip border-danger/60 bg-danger/10 font-bold text-danger">{x.label}</span>
+                {x.level && (
+                  <span className={`chip num ${x.newest ? 'border-accent/50 text-accent' : ''}`}>
+                    vs {x.level}
+                    {x.newest ? ' · newest' : ''}
+                  </span>
+                )}
                 <span className="chip">{x.edit_type || 'other'}</span>
                 {x.patched_in ? (
                   <span className="chip border-truth/50 text-truth">patched in {x.patched_in}</span>
@@ -83,7 +89,7 @@ export default function Board() {
                 <th className="px-4 py-3 text-right font-medium">Score</th>
                 <th className="px-4 py-3 text-right font-medium">Snuck</th>
                 <th className="px-4 py-3 text-right font-medium">Streak</th>
-                <th className="px-4 py-3 text-right font-medium">Detector</th>
+                <th className="px-4 py-3 text-right font-medium">Level</th>
               </tr>
             </thead>
             <tbody>
@@ -94,7 +100,7 @@ export default function Board() {
                   <td className="num px-4 py-3 text-right text-accent">{r.score.toLocaleString()}</td>
                   <td className="num px-4 py-3 text-right">{r.snuck}</td>
                   <td className="num px-4 py-3 text-right">{r.best_streak}</td>
-                  <td className="num px-4 py-3 text-right text-chalk-dim">{r.detector_version}</td>
+                  <td className="num px-4 py-3 text-right text-chalk-dim">{r.level ?? r.detector_version}</td>
                 </tr>
               ))}
               {rows?.length === 0 && (

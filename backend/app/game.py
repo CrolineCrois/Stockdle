@@ -69,12 +69,27 @@ def remaining_s(rnd: Round, now: datetime | None = None) -> float:
 
 
 # --- runs and rounds -------------------------------------------------------
-def start_run(db: Session, player: Player) -> tuple[Run, Round]:
+def level_of(run: Run) -> str:
+    return run.level or verifiers.newest_level()
+
+
+def level_mult(level: str) -> float:
+    """1.0 on the newest fact-checker; x LEVEL_STEP_MULT per version older."""
+    names = [v.name for v in verifiers.levels()]
+    steps = len(names) - 1 - names.index(level) if level in names else 0
+    return round(config.LEVEL_STEP_MULT ** max(0, steps), 4)
+
+
+def start_run(db: Session, player: Player, level: str | None = None) -> tuple[Run, Round]:
+    names = [v.name for v in verifiers.levels()]
+    level = level or verifiers.newest_level()
+    if level not in names:
+        raise GameError(f"No such level: {level}.", 422)
     for old in db.scalars(select(Run).where(Run.player_id == player.id,
                                             Run.ended_at.is_(None))).all():
         old.ended_at = utcnow()                      # abandon any unfinished run
     run = Run(id=uuid.uuid4().hex[:20], player_id=player.id, lives=config.LIVES,
-              detector_version=registry.current_name())
+              detector_version=registry.current_name(), level=level)
     db.add(run)
     player.runs += 1
     db.flush()
@@ -117,7 +132,7 @@ def next_round(db: Session, run: Run) -> Round:
     return rnd
 
 
-def suspicion(headline: Headline, edited: str) -> float:
+def suspicion(headline: Headline, edited: str, level: str | None = None) -> float:
     """The "first glance" score for the live meter, read against the source passage
     the verifier is most likely to use.
 
@@ -129,7 +144,8 @@ def suspicion(headline: Headline, edited: str) -> float:
     premise = premise_for(headline.id)
     if config.METER == "style":
         return round(predict_one(registry.current(), edited, premise), 4)
-    return round(verifiers.current().score(edited, [premise])[0]["refuted"], 4)
+    model = verifiers.load(level) if level else verifiers.current()
+    return round(model.score(edited, [premise])[0]["refuted"], 4)
 
 
 # --- submissions -----------------------------------------------------------
@@ -269,7 +285,7 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
 
     verification = None
     if ruling.valid and not ruling.vague_caught:
-        verification = verify(edited, headline.id, rnd.mode)
+        verification = verify(edited, headline.id, rnd.mode, model=verifiers.load(level_of(run)))
     rnd.paused_s += time.monotonic() - t0
 
     rnd.attempts_used += 1
@@ -325,6 +341,10 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
             streak=run.streak, remaining_s=max(0.0, remaining), start_s=rnd.timer_start_s,
             is_novel=is_novel, is_bounty=rnd.is_bounty, materiality=ruling.materiality,
             sharp=ruling.sharp, vague=ruling.vague, partial=outcome == "partial")
+        mult = level_mult(level_of(run))
+        if mult < 1:
+            points.level_mult = mult
+            points.total = round(points.total * mult)
         run.score += points.total
         if outcome == "snuck":
             run.snuck += 1

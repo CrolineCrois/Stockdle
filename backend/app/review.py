@@ -20,8 +20,12 @@ EXPLOIT = ("snuck", "partial")
 
 
 def queue(db: Session, status: str = "pending", limit: int = 50) -> list[dict]:
+    from verifier.registry import newest_level
+    # Exploits against the newest fact-checker first: those are what the next
+    # patch day most needs. Older levels follow, newest first within each.
     q = (select(Attempt).where(Attempt.outcome.in_(EXPLOIT))
-         .order_by(Attempt.created_at.desc()).limit(limit))
+         .order_by((Attempt.verifier_version == newest_level()).desc(), Attempt.created_at.desc())
+         .limit(limit))
     if status == "pending":       # "" = exploits logged before review existed
         q = q.where(Attempt.review_status.in_(("pending", "")))
     elif status != "all":
@@ -51,6 +55,7 @@ def queue(db: Session, status: str = "pending", limit: int = 50) -> list[dict]:
             "verifier": {"verdict": a.verifier_verdict, "version": a.verifier_version,
                          "probs": json.loads(a.verifier_probs_json or "{}")},
             "evidence": passages, "review_status": a.review_status,
+            "level": a.verifier_version or "v0", "newest": (a.verifier_version or "v0") == newest_level(),
             "reviewer_id": a.reviewer_id,
         })
     return out
