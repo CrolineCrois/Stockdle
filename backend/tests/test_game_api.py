@@ -491,3 +491,13 @@ def test_tries_are_unlimited_but_rate_limited(client, monkeypatch):
     w = list(words); w[idx[0]] = "with"
     r = client.post(f"/api/round/{rid}/submit", json={"player_id": pid, "edited": " ".join(w)})
     assert r.status_code in (429, 409)                      # too fast (or round already over)
+
+
+def test_new_players_are_limited_per_network(client, monkeypatch):
+    from app import config, main
+    monkeypatch.setattr(config, "PLAYERS_PER_IP_PER_HOUR", 2)
+    main._windows.clear()
+    h = {"cf-connecting-ip": "203.0.113.9"}
+    codes = [client.post("/api/player", json={"name": f"Ip{i}"}, headers=h).status_code for i in range(3)]
+    assert codes == [200, 200, 429]
+    assert client.post("/api/player", json={"name": "Other"}, headers={"cf-connecting-ip": "203.0.113.10"}).status_code == 200

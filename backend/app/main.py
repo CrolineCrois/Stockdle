@@ -29,7 +29,7 @@ import uuid
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from pydantic import BaseModel, Field
@@ -73,6 +73,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Sneak It Past", version="0.1.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS or ["*"],
+                   allow_origin_regex=config.CORS_ORIGIN_REGEX or None,
                    allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 
 
@@ -87,6 +88,27 @@ def _meter_rate_limit(player_id: str) -> None:
     if len(log) >= config.SUSPICION_RATE_PER_S:
         raise HTTPException(429, "Meter is updating too fast.")
     log.append(now)
+
+
+_windows: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _limit(key: str, limit: int, per_s: float, message: str) -> None:
+    """Sliding-window rate limit (in memory: one server process)."""
+    now, log = time.monotonic(), _windows[key]
+    while log and now - log[0] > per_s:
+        log.popleft()
+    if limit > 0 and len(log) >= limit:
+        raise HTTPException(429, message)
+    log.append(now)
+
+
+def _ip(request: Request) -> str:
+    # Behind a Cloudflare tunnel every request comes from localhost; the real
+    # client is in CF-Connecting-IP.
+    return (request.headers.get("cf-connecting-ip")
+            or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+            or (request.client.host if request.client else "?"))
 
 
 def _player(db: Session, player_id: str) -> Player:
@@ -135,9 +157,11 @@ def health(db: Session = Depends(get_session)) -> dict:
 
 
 @app.post("/api/player")
-def upsert_player(body: PlayerIn, db: Session = Depends(get_session)) -> dict:
+def upsert_player(body: PlayerIn, request: Request, db: Session = Depends(get_session)) -> dict:
     p = db.get(Player, body.player_id) if body.player_id else None
     if p is None:
+        _limit(f"player:{_ip(request)}", config.PLAYERS_PER_IP_PER_HOUR, 3600,
+               "Too many new players from this network — try again later.")
         p = Player(id=body.player_id or uuid.uuid4().hex[:24], name=body.name)
         db.add(p)
     else:
@@ -228,7 +252,11 @@ def _result_out(db: Session, res: game.Result, run: Run) -> dict:
 
 
 @app.post("/api/round/{round_id}/submit")
-def submit(round_id: str, body: SubmitIn, db: Session = Depends(get_session)) -> dict:
+def submit(round_id: str, body: SubmitIn, request: Request, db: Session = Depends(get_session)) -> dict:
+    _limit(f"submit:{_ip(request)}", config.SUBMITS_PER_IP_PER_MIN, 60,
+           "Slow down — too many submissions from this network.")
+    _limit("submit:all", config.SUBMITS_PER_HOUR, 3600,
+           "The judge is at its hourly limit — try again in a few minutes.")
     player = _player(db, body.player_id)
     rnd, run, _ = _round(db, round_id, player)
     res = _game_errors(lambda: game.submit(

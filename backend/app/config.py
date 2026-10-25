@@ -103,8 +103,14 @@ CORS_ORIGINS = [o for o in _env(
     "SIP_CORS_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001",
 ).split(",") if o]
+# Deployed frontends, e.g. "https://.*\.vercel\.app" (regex, on top of the list above).
+CORS_ORIGIN_REGEX = _env("SIP_CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app")
 ADMIN_TOKEN = _env("SIP_ADMIN_TOKEN", "sneak-demo")
 SUSPICION_RATE_PER_S = _env("SIP_SUSPICION_RATE_PER_S", 8.0)   # live-meter calls
+# Public hosting: every submit is two paid judge calls. Per-IP and global caps.
+SUBMITS_PER_IP_PER_MIN = _env("SIP_SUBMITS_PER_IP_PER_MIN", 20)
+PLAYERS_PER_IP_PER_HOUR = _env("SIP_PLAYERS_PER_IP_PER_HOUR", 10)
+SUBMITS_PER_HOUR = _env("SIP_SUBMITS_PER_HOUR", 2000)          # all players together
 
 # --- detector training (phase 2+) -------------------------------------------
 # The LLM that writes v0's training fakes. Only used when an API key is set.

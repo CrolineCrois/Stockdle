@@ -114,6 +114,24 @@ learns, step by step, with live numbers), `/lab` (analytics), `/admin` (review; 
 
 ---
 
+## Letting other people play
+
+The website goes on **Vercel**; the backend (judge, fact-checker, database) runs on
+your machine behind a **Cloudflare quick tunnel**, so every round lands in your
+local `data/sneak.db`.
+
+1. `npm run dev` (backend on :8000), then `caffeinate -dimsu` so the Mac doesn't sleep.
+2. `cloudflared tunnel --url http://localhost:8000` — prints a public
+   `https://<random>.trycloudflare.com` URL.
+3. From `frontend/`: `npx vercel --prod -b NEXT_PUBLIC_API_BASE=<tunnel URL>`
+   (first time: log in and accept the defaults). The API URL is baked in at build
+   time, so a new tunnel URL (cloudflared restarted) needs a redeploy.
+
+Before going public: set `SIP_ADMIN_TOKEN` in `.env` (the `sneak-demo` default is in
+this README). Built-in limits, all in `.env`: 20 submits per network per minute,
+10 new players per network per hour, 2,000 submits per hour overall (each submit =
+two judge calls). `*.vercel.app` origins are allowed by CORS (`SIP_CORS_ORIGIN_REGEX`).
+
 ## Data collection and review
 
 Data volume is the biggest risk. **Start playing as soon as it runs** — the team and
