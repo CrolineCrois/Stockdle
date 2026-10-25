@@ -11,7 +11,7 @@ import type { RunInfo } from '@/lib/api';
 
 export function shareText(run: RunInfo): string {
   return [
-    `🕵️ Sneak It Past — ${run.score.toLocaleString()} pts`,
+    `🤓 Erm, Akthually — ${run.score.toLocaleString()} pts`,
     `✅ ${run.snuck} snuck past · 〰️ ${run.partial} partial · ❌ ${run.caught} caught · 🔥 best streak ${run.best_streak}`,
     `vs fact-checker ${run.level || run.detector_version}`,
   ].join('\n');
@@ -37,7 +37,7 @@ export default function ShareCard({ run }: { run: RunInfo }) {
 
   return (
     <div className="mx-auto mt-5 max-w-sm rounded-2xl border border-accent/40 bg-gradient-to-br from-accent/15 via-ink-900 to-ink-950 p-5 text-left shadow-glow">
-      <p className="label text-accent">Sneak It Past</p>
+      <p className="label text-accent">Erm, Akthually 🤓</p>
       <p className="num mt-1 text-4xl font-black">{run.score.toLocaleString()}</p>
       <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs text-chalk-dim">
         <div className="rounded-lg bg-ink-950/60 p-2">

@@ -1,4 +1,6 @@
-# Sneak It Past
+# Erm, Akthually 🤓
+
+*(formerly Sneak It Past)*
 
 **Players write false headlines that a search-backed fact-checker wrongly marks as SUPPORTED. Every win is a real fact-checker failure.**
 
@@ -250,7 +252,7 @@ both runs and the combined ruling; `materiality`, `specificity`,
 
 - **Player-made headlines are synthetic misinformation.** They stay in our database,
   labelled, with no public feed or export. Wherever they're shown (Exploit Board,
-  `/lab`, `/admin`) they carry a **"FAKE — made in Sneak It Past"** label; outside
+  `/lab`, `/admin`) they carry a **"FAKE — made in Erm, Akthually"** label; outside
   `/admin` only as the struck-through original plus the changed words.
 - **Players are told before their first run** that edits are logged for research
   and model training.

@@ -3,7 +3,8 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Sneak It Past',
+  title: 'Erm, Akthually 🤓',
+  icons: { icon: '/icon.svg' },
   description: 'Edit a true headline into a lie the AI can\'t catch. Every trick that works trains it.',
 };
 

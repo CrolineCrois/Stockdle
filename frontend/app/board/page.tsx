@@ -4,7 +4,7 @@
  * The Exploit Board (novel tricks that got past the detector) and the best runs.
  *
  * Exploits are player-made fakes: each is shown struck through against the
- * original, under a "FAKE — made in Sneak It Past" label, and is never offered
+ * original, under a "FAKE — made in Erm, Akthually" label, and is never offered
  * for copying or sharing.
  */
 

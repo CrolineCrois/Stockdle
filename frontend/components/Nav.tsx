@@ -16,10 +16,10 @@ export default function Nav({ right }: { right?: React.ReactNode }) {
     <header className="sticky top-0 z-30 border-b border-ink-800/80 bg-ink-950/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
         <Link href="/" className="group flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-you text-sm font-black text-ink-950">
-            S
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-you text-base" aria-hidden>
+            🤓
           </span>
-          <span className="text-sm font-bold tracking-[0.2em] text-chalk">SNEAK IT PAST</span>
+          <span className="text-sm font-bold tracking-[0.12em] text-chalk">ERM, AKTHUALLY</span>
         </Link>
         <nav className="flex items-center gap-1">
           {LINKS.map((l) => {

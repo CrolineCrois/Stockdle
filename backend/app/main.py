@@ -1,4 +1,4 @@
-"""Sneak It Past — FastAPI backend.
+"""Erm, Akthually 🤓 — FastAPI backend.
 
     POST /api/player                    create or rename a player
     POST /api/run                       start a run (3 lives) and its first round
@@ -73,7 +73,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Sneak It Past", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Erm, Akthually", version="0.1.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS or ["*"],
                    allow_origin_regex=config.CORS_ORIGIN_REGEX or None,
                    allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
@@ -308,7 +308,7 @@ def leaderboard(db: Session = Depends(get_session)) -> dict:
                      for i, (r, name) in enumerate(rows)]}
 
 
-FAKE_LABEL = "FAKE — made in Sneak It Past"
+FAKE_LABEL = "FAKE — made in Erm, Akthually"
 
 
 @app.get("/api/exploits")
