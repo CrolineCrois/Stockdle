@@ -218,6 +218,12 @@ export default function Scorecard({ data }: { data: LearningSummary }) {
           ? 'Each patch day adds a version trained on your approved lies.'
           : 'No patch day yet: it is still the off-the-shelf v0. The first retrain comes once enough of your lies are approved — this chart will show whether it improved, including if it didn’t.'}
       </p>
+      {data.verifier.some((v) => !v.benchmark) && (
+        <p className="mt-2 text-xs text-chalk-faint">
+          Still being measured: {data.verifier.filter((v) => !v.benchmark).map((v) => v.name).join(', ')} — its bars
+          appear when scoring finishes.
+        </p>
+      )}
       <div className="mt-3">
         {tables ? <Table versions={data.verifier} live={data.live} /> : <VersionChart rows={rowsFor(data.verifier)} withLive />}
       </div>
