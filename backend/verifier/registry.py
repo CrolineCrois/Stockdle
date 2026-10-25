@@ -69,6 +69,8 @@ def register(name: str, path: str, *, train_data: str, n_train: int, metrics: di
     global _current
     with SessionLocal() as db:
         row = db.scalar(select(VerifierVersion).where(VerifierVersion.name == name))
+        if row is not None and row.is_current and not make_current:
+            raise ValueError(f"{name} is the live fact-checker; refusing to overwrite it")
         if row is None:
             row = VerifierVersion(name=name, path=path)
             db.add(row)

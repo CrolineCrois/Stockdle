@@ -28,4 +28,6 @@ Thumbs.db
 
 # Trained detectors (rebuilt by setup / training scripts; DistilBERT is ~250MB)
 data/detectors/
+data/verifiers/
+data/eval/results/
 frontend/tsconfig.tsbuildinfo

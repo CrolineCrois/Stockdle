@@ -37,3 +37,12 @@ def test_retrieval_finds_the_source_and_breaking_mode_hides_it():
         hid = h.id
     assert retrieve("Zorblax glimmerfruit tariff", 3)[0].headline_id == hid
     assert all(x.headline_id != hid for x in retrieve("Zorblax glimmerfruit tariff", 3, exclude_headline_id=hid))
+
+
+def test_register_refuses_to_overwrite_the_live_verifier():
+    import pytest
+    from verifier import registry
+    registry.ensure_v0()
+    with pytest.raises(ValueError):
+        registry.register(registry.current_name(), "/tmp/x", train_data="human", n_train=1,
+                          metrics={}, note="", make_current=False)

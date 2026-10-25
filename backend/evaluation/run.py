@@ -39,6 +39,8 @@ MODEL_DIR = config.DATA_DIR / "verifiers"
 
 def _train(name: str, lies: list[Example], truths: list[Example], train_data: str, log,
            epochs: int = SETTINGS["epochs"]) -> VerifierModel:
+    if name == registry.current_name():
+        raise SystemExit(f"{name} is the live fact-checker; evaluation models need their own names")
     examples = lies + truths
     random.Random(SETTINGS["seed"]).shuffle(examples)
     log(f"[eval] training {name}: {len(lies)} false + {len(truths)} true examples")
@@ -69,12 +71,14 @@ def run(*, dev: bool = False, vitaminc_n: int = 500, min_train: int = 10,
 
     vc = vitaminc(vitaminc_n) if vitaminc_n else []
     models = {"v0": registry.load("v0")}
-    models["v1-human"] = _train("v1-human", lies_h, truths, "human", log, epochs)
+    # Own names ("eval-..."): patch days ship "v1-human", "v2-human", ... and an
+    # evaluation run must never overwrite the live fact-checker's files or row.
+    models["v1-human"] = _train("eval-human", lies_h, truths, "human", log, epochs)
     if synth:
         # Same count as human: if the control came up short, say so in the results.
-        models["v1-synthetic"] = _train("v1-synthetic", synth[:n], truths, "synthetic", log, epochs)
+        models["v1-synthetic"] = _train("eval-synthetic", synth[:n], truths, "synthetic", log, epochs)
         half = n // 2
-        models["v1-combined"] = _train("v1-combined", lies_h[:n - half] + synth[:half], truths,
+        models["v1-combined"] = _train("eval-combined", lies_h[:n - half] + synth[:half], truths,
                                        "combined", log, epochs)
 
     results = {"created_at": datetime.now(timezone.utc).isoformat(), "dev_data": dev,
@@ -89,7 +93,7 @@ def run(*, dev: bool = False, vitaminc_n: int = 500, min_train: int = 10,
         log(f"[eval] scoring {name}")
         results["models"][name] = score_all(model, sets, vc)
         if name != "v0":
-            registry.evict(name)
+            registry.evict(model.name)
 
     out = EVAL_DIR / "results"
     out.mkdir(parents=True, exist_ok=True)
