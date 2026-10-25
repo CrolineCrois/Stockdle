@@ -46,7 +46,7 @@ def _train(name: str, lies: list[Example], truths: list[Example], train_data: st
     log(f"[eval] training {name}: {len(lies)} false + {len(truths)} true examples")
     model = finetune(name, config.VERIFIER_BASE_MODEL, examples, MODEL_DIR / name, epochs=epochs,
                      log=log)
-    registry.register(name, str(MODEL_DIR / name), train_data=train_data, n_train=len(examples),
+    registry.register(name, str(MODEL_DIR / name), train_data=f"eval-{train_data}", n_train=len(examples),
                       metrics={}, note=f"evaluation model ({train_data})", make_current=False)
     return model
 
