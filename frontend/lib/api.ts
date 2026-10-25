@@ -406,6 +406,8 @@ export interface Benchmark {
   human_lies_caught?: CI | null;
   /** What it was measured on: set sizes (+ the verdict rule). Versions compare only if equal. */
   set?: (number | string)[];
+  /** Held-out player lies grouped by the version they fooled when played. */
+  by_fooled?: Record<string, CI>;
 }
 
 export interface LearningVersion {

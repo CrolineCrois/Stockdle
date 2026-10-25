@@ -84,6 +84,15 @@ def benchmark_verifier(name: str, force: bool = False) -> dict:
     # v0 when played (that's what makes them exploits), so v0 scores near zero
     # by construction; later versions are the honest comparison.
     bench["human_lies_caught"] = refute_recall(model, human_test)["overall"] if human_test else None
+    # The same lies grouped by which version they fooled when played: a group is
+    # only a fair test for versions it was NOT picked against.
+    with SessionLocal() as db:
+        fooled = {a.edited_headline: (a.verifier_version or "v0") for a in db.scalars(
+            select(Attempt).where(Attempt.review_status == "approved")).all()}
+    groups: dict[str, list] = {}
+    for item in human_test:
+        groups.setdefault(fooled.get(item[0].claim, "v0"), []).append(item)
+    bench["by_fooled"] = {k: refute_recall(model, items)["overall"] for k, items in groups.items()}
     with SessionLocal() as db:
         row = db.scalar(select(VerifierVersion).where(VerifierVersion.name == name))
         m = json.loads(row.metrics_json or "{}")
