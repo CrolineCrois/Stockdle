@@ -76,6 +76,11 @@ function runParallel(specs) {
   return new Promise(() => {});
 }
 
+// Auto-reload restarts the API on every backend file change: models reload and
+// the search index rebuilds, which stalls a public game for a minute or two.
+// SIP_RELOAD=0 (set it while hosting) turns it off; restart by hand instead.
+const RELOAD = process.env.SIP_RELOAD === '0' ? [] : ['--reload'];
+
 const tasks = {
   async setup() {
     if (!existsSync(VENV_PY)) {
@@ -96,13 +101,13 @@ const tasks = {
   },
 
   dev: () => {
-    console.log('\n  Sneak It Past — http://localhost:3000  (API on :8000)\n');
+    console.log('\n  Erm, Akthually — http://localhost:3000  (API on :8000)\n');
     return runParallel([
-      { name: 'api', cmd: py(), args: ['-m', 'uvicorn', 'app.main:app', '--reload', '--port', '8000'], cwd: BACKEND },
+      { name: 'api', cmd: py(), args: ['-m', 'uvicorn', 'app.main:app', ...RELOAD, '--port', '8000'], cwd: BACKEND },
       { name: 'web', cmd: 'npm', args: ['run', 'dev'], cwd: FRONTEND },
     ]);
   },
-  api: () => run(py(), ['-m', 'uvicorn', 'app.main:app', '--reload', '--port', '8000'], { cwd: BACKEND }),
+  api: () => run(py(), ['-m', 'uvicorn', 'app.main:app', ...RELOAD, '--port', '8000'], { cwd: BACKEND }),
   web: () => run('npm', ['run', 'dev'], { cwd: FRONTEND }),
   scrape: () => run(py(), ['-m', 'ingest.scrape_rss'], { cwd: BACKEND }),
   seed: () => run(py(), ['-m', 'ingest.seed'], { cwd: BACKEND }),

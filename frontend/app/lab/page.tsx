@@ -176,7 +176,7 @@ export default function Lab() {
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 15_000);
+    const id = setInterval(load, 60_000);
     return () => clearInterval(id);
   }, [load]);
 

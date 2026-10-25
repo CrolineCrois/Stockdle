@@ -311,6 +311,13 @@ def test_analytics_has_every_dashboard_section(client):
     body = client.get("/api/analytics").json()
     assert {"totals", "versions", "edit_types", "words_added", "timer", "mock_judged_attempts"} <= body.keys()
     assert [b["bucket"] for b in body["timer"]] == ["0–25%", "25–50%", "50–75%", "75–100%"]
+    # Meter versions are scored in a background thread; wait for the first result.
+    import time
+    for _ in range(60):
+        if body["versions"]:
+            break
+        time.sleep(0.5)
+        body = client.get("/api/analytics").json()
     assert any(v["name"] == "stub" for v in body["versions"])
     real = client.get("/api/analytics?judge=real").json()
     assert real["totals"]["attempts"] <= body["totals"]["attempts"]

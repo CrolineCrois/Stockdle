@@ -14,6 +14,8 @@ only for the duration of its own scoring.
 from __future__ import annotations
 
 import json
+import time
+import threading
 from collections import Counter
 
 from sqlalchemy import func, select
@@ -24,6 +26,7 @@ from detector.evaluate import catch_rate, metrics
 
 from . import config, review
 from .diffing import norm
+from .db import SessionLocal
 from .models import Attempt, DetectorVersion, Headline, Player, Round
 
 STOPWORDS = {"a", "an", "the", "of", "to", "in", "on", "for", "and", "as", "at", "by", "with",
@@ -43,7 +46,38 @@ def _attempts(db: Session, judge: str) -> list[Attempt]:
     return rows
 
 
+VERSION_TTL_S = 1800
+_version_state: dict = {"rows": [], "at": 0.0, "running": False}
+_version_lock = threading.Lock()
+
+
 def _version_rows(db: Session, exploits: list[Attempt]) -> list[dict]:
+    """Meter versions scored on held-out data. Scoring runs thousands of model
+    calls, so it happens in a background thread at most every VERSION_TTL_S;
+    requests always get the latest finished result immediately (it used to be
+    recomputed whenever a new exploit appeared, which pinned the CPU under
+    public load)."""
+    with _version_lock:
+        stale = time.monotonic() - _version_state["at"] > VERSION_TTL_S or not _version_state["rows"]
+        if stale and not _version_state["running"]:
+            _version_state["running"] = True
+            threading.Thread(target=_refresh_versions, daemon=True).start()
+        return list(_version_state["rows"])
+
+
+def _refresh_versions() -> None:
+    try:
+        with SessionLocal() as db:
+            exploits = [a for a in db.scalars(select(Attempt)).all() if a.outcome == "snuck"]
+            rows = _compute_version_rows(db, exploits)
+        with _version_lock:
+            _version_state["rows"], _version_state["at"] = rows, time.monotonic()
+    finally:
+        with _version_lock:
+            _version_state["running"] = False
+
+
+def _compute_version_rows(db: Session, exploits: list[Attempt]) -> list[dict]:
     from detector.patch_day import is_holdout
     from detector.splits import SPLIT_FILE, synthetic_examples
 

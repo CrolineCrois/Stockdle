@@ -122,7 +122,8 @@ The website goes on **Vercel**; the backend (judge, fact-checker, database) runs
 your machine behind a **Cloudflare quick tunnel**, so every round lands in your
 local `data/sneak.db`.
 
-1. `npm run dev` (backend on :8000), then `caffeinate -dimsu` so the Mac doesn't sleep.
+1. `SIP_RELOAD=0 npm run dev` (backend on :8000; no auto-reload, so code edits never restart the
+   live game — restart it by hand at a quiet moment), then `caffeinate -dimsu` so the Mac doesn't sleep.
 2. `cloudflared tunnel --url http://localhost:8000` — prints a public
    `https://<random>.trycloudflare.com` URL.
 3. From `frontend/`: `npx vercel --prod -b NEXT_PUBLIC_API_BASE=<tunnel URL>`
