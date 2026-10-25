@@ -395,6 +395,8 @@ export const versionsApi = {
 export interface Benchmark {
   lies_caught: CI;
   true_flagged: CI;
+  /** Approved player lies on held-out headlines (all fooled v0 when played). */
+  human_lies_caught?: CI | null;
 }
 
 export interface LearningVersion {

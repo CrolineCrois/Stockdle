@@ -60,12 +60,15 @@ def _summary(caught_fakes: list[float], flagged_trues: list[float], key: tuple) 
 
 
 def benchmark_verifier(name: str, force: bool = False) -> dict:
+    from evaluation.data import human_sets
+    from evaluation.metrics import refute_recall
+    human_test = human_sets(include_pending=False)["test"]   # approved, test-side headlines
     with SessionLocal() as db:
         ids = _verifier_test_ids(db)
         trues, fakes = _sets(db, ids)
         row = db.scalar(select(VerifierVersion).where(VerifierVersion.name == name))
         metrics = json.loads(row.metrics_json or "{}")
-        key = (len(trues), len(fakes))
+        key = (len(trues), len(fakes), len(human_test))
         if not force and metrics.get("benchmark", {}).get("set") == list(key):
             return metrics["benchmark"]
     model = verifiers.load(name)
@@ -75,6 +78,10 @@ def benchmark_verifier(name: str, force: bool = False) -> dict:
         return float(aggregate(model.score(claim, [h.text for h in hits]))[0] == "refuted")
 
     bench = _summary([refuted(c) for c, _ in fakes], [refuted(c) for c, _ in trues], key)
+    # Players' approved lies on headlines no version trains on. They all fooled
+    # v0 when played (that's what makes them exploits), so v0 scores near zero
+    # by construction; later versions are the honest comparison.
+    bench["human_lies_caught"] = refute_recall(model, human_test)["overall"] if human_test else None
     with SessionLocal() as db:
         row = db.scalar(select(VerifierVersion).where(VerifierVersion.name == name))
         m = json.loads(row.metrics_json or "{}")

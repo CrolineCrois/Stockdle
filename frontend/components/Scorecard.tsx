@@ -37,7 +37,12 @@ const err = (c?: CI | null) => {
   const e = [c.value - (c.lo ?? c.value), (c.hi ?? c.value) - c.value];
   return e[0] > 0 || e[1] > 0 ? e : null;
 };
-const ciText = (c?: CI | null) => (!c || c.value === null ? '—' : `${pct(c.value)} [${pct(c.lo)}–${pct(c.hi)}], n=${c.n}`);
+// Below this many examples a bootstrap range is meaningless (5 of 5 gives
+// "0%–0%"), so show the raw count instead.
+const SMALL_N = 20;
+const count = (c: CI) => `${Math.round((c.value ?? 0) * c.n)} of ${c.n}`;
+const ciText = (c?: CI | null) =>
+  !c || c.value === null ? '—' : c.n < SMALL_N ? `${pct(c.value)} (${count(c)})` : `${pct(c.value)} [${pct(c.lo)}–${pct(c.hi)}], n=${c.n}`;
 
 function Tip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -54,7 +59,7 @@ function Tip({ active, payload, label }: any) {
   );
 }
 
-function Headline({ label, value, sub, color }: { label: string; value: CI | undefined; sub: string; color: string }) {
+function Headline({ label, value, sub, color }: { label: string; value: CI | null | undefined; sub: string; color: string }) {
   return (
     <div className="rounded-xl bg-ink-950/50 p-4">
       <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-chalk-faint">
@@ -63,7 +68,11 @@ function Headline({ label, value, sub, color }: { label: string; value: CI | und
       </p>
       <p className="mt-1 text-4xl font-black tracking-tight">{value?.value != null ? pct(value.value) : '—'}</p>
       <p className="mt-1 text-xs text-chalk-dim">
-        {value?.value != null ? `95% range ${pct(value.lo)}–${pct(value.hi)} · ` : ''}
+        {value?.value != null
+          ? value.n < SMALL_N
+            ? `${count(value)} — a small sample, so treat it as rough · `
+            : `95% range ${pct(value.lo)}–${pct(value.hi)} · `
+          : ''}
         {sub}
       </p>
     </div>
@@ -99,9 +108,9 @@ function VersionChart({ rows, withLive }: { rows: any[]; withLive: boolean }) {
   );
 }
 
-function rowsFor(versions: LearningVersion[], live?: LearningSummary['live']) {
+function rowsFor(versions: LearningVersion[]) {
   return versions.map((v) => {
-    const l = live?.find((x) => x.version === v.name)?.caught;
+    const l = v.benchmark?.human_lies_caught;
     return {
       name: v.name,
       machine: v.benchmark?.lies_caught.value ?? null,
@@ -122,7 +131,8 @@ function Table({ versions, live }: { versions: LearningVersion[]; live?: Learnin
           <tr className="text-left text-chalk-faint">
             <th className="py-2 font-medium">Version</th>
             <th className="py-2 font-medium">Machine-written lies caught</th>
-            {live && <th className="py-2 font-medium">Your lies caught</th>}
+            {live && <th className="py-2 font-medium">Your lies caught (held out)</th>}
+            {live && <th className="py-2 font-medium">Your lies caught (live play)</th>}
             <th className="py-2 font-medium">True headlines flagged</th>
           </tr>
         </thead>
@@ -134,6 +144,7 @@ function Table({ versions, live }: { versions: LearningVersion[]; live?: Learnin
                 {v.is_current && <span className="ml-2 text-xs text-truth">live</span>}
               </td>
               <td className="num py-2 text-chalk-dim">{ciText(v.benchmark?.lies_caught)}</td>
+              {live && <td className="num py-2 text-chalk-dim">{ciText(v.benchmark?.human_lies_caught)}</td>}
               {live && <td className="num py-2 text-chalk-dim">{ciText(live.find((x) => x.version === v.name)?.caught)}</td>}
               <td className="num py-2 text-chalk-dim">{ciText(v.benchmark?.true_flagged)}</td>
             </tr>
@@ -148,6 +159,7 @@ export default function Scorecard({ data }: { data: LearningSummary }) {
   const [tables, setTables] = useState(false);
   const live = data.verifier.find((v) => v.is_current);
   const liveNow = data.live.find((x) => x.version === live?.name)?.caught;
+  const heldOut = live?.benchmark?.human_lies_caught;
   const retrained = data.verifier.filter((v) => v.train_data === 'human').length > 0;
   const first = data.meter[0]?.benchmark;
   const now = data.meter.find((m) => m.is_current)?.benchmark;
@@ -173,14 +185,20 @@ export default function Scorecard({ data }: { data: LearningSummary }) {
         />
         <Headline
           label="Your lies it catches"
-          value={liveNow}
-          sub={`${liveNow?.n ?? 0} judge-approved lies played against ${live?.name ?? 'it'}`}
+          value={heldOut}
+          sub={`approved lies on headlines ${live?.name ?? 'it'} never trained on`}
           color={SERIES.human}
         />
       </div>
-      {live?.benchmark?.lies_caught.value != null && liveNow?.value != null && (
+      {liveNow && liveNow.n > 0 && (
+        <p className="mt-2 text-xs text-chalk-faint">
+          In live play since {live?.name} went live: caught {count(liveNow)} judge-approved lies
+          {liveNow.n < SMALL_N ? ' — too few to judge yet.' : ` (${pct(liveNow.value)}).`}
+        </p>
+      )}
+      {live?.benchmark?.lies_caught.value != null && heldOut?.value != null && (
         <p className="mt-3 text-sm text-chalk-dim">
-          {liveNow.value < live.benchmark.lies_caught.value ? (
+          {heldOut.value < live.benchmark.lies_caught.value ? (
             <>
               People fool the fact-checker far more often than AI-written lies do — that gap is exactly what this
               game collects. It wrongly flags {pct(live.benchmark.true_flagged.value)} of true headlines.
@@ -193,13 +211,15 @@ export default function Scorecard({ data }: { data: LearningSummary }) {
 
       <h3 className="mt-6 font-bold">The fact-checker, version by version</h3>
       <p className="mt-1 text-sm text-chalk-dim">
-        Every version is scored on the same held-out headlines no version trains on.{' '}
+        Every version is scored on the same held-out headlines no version trains on. The blue bars are
+        players’ approved lies on those headlines; they all fooled v0 when played, so v0 scores near zero by
+        design and the later versions are the real test.{' '}
         {retrained
           ? 'Each patch day adds a version trained on your approved lies.'
           : 'No patch day yet: it is still the off-the-shelf v0. The first retrain comes once enough of your lies are approved — this chart will show whether it improved, including if it didn’t.'}
       </p>
       <div className="mt-3">
-        {tables ? <Table versions={data.verifier} live={data.live} /> : <VersionChart rows={rowsFor(data.verifier, data.live)} withLive />}
+        {tables ? <Table versions={data.verifier} live={data.live} /> : <VersionChart rows={rowsFor(data.verifier)} withLive />}
       </div>
 
       <h3 className="mt-6 font-bold">The first-glance meter, version by version</h3>
