@@ -34,7 +34,8 @@ preview — on submit the fact-checker searches more evidence and makes the real
 
 1. **The judge rules — twice.** An LLM judge reads the original, the snippet and
    your edit with two differently worded prompts. Both must agree it's false, or it
-   doesn't count. (For plausibility and grammar a split vote is borderline, so an edit
+   doesn't count — a split costs no try (it's the judges' uncertainty, not yours), and
+   the identical edit can't be resubmitted to re-roll them. (For plausibility and grammar a split vote is borderline, so an edit
    only fails those if both runs flag it.) It also scores:
    - **materiality** 1–5 — would a reader believe something false *and meaningful*?
      Below 3 is **"Too pedantic"**: invalid, no points, no life lost.

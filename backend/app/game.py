@@ -284,6 +284,11 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
         events.append("times_up")
     elif not ruling.valid:
         outcome = "invalid"
+        if ruling.reason == "disagree":
+            # The judges split: their uncertainty, not the player's mistake. It
+            # still doesn't count (the spec's rule) but costs no try.
+            rnd.attempts_used -= 1
+            tags.append("Judges split — no try used")
         round_over = rnd.attempts_used >= config.MAX_ATTEMPTS
         if round_over:
             run.streak = 0

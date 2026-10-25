@@ -438,3 +438,22 @@ def test_a_player_is_not_dealt_a_headline_they_have_seen_while_unseen_ones_remai
         state = client.post("/api/run", json={"player_id": pid}).json()
         seen.append(state["round"]["headline"]["id"])
     assert len(set(seen)) == len(seen)
+
+
+def test_a_judge_split_costs_no_try(client, monkeypatch):
+    from app import game
+    from judge.base import Verdict, rule
+
+    def split(judge, original, snippet, edited):
+        base = dict(is_grammatical=True, is_plausible=True, materiality=4, specificity=4,
+                    original_specificity=4, vagueness_flags=[], edit_type="other", explanation="x")
+        return rule(Verdict(is_false=True, **base), Verdict(is_false=False, **base),
+                    judge="t", model=None)
+
+    monkeypatch.setattr(game, "judge_twice", split)
+    pid, state = new_run(client, "Split")
+    rid = state["round"]["id"]
+    body = client.post(f"/api/round/{rid}/submit",
+                       json={"player_id": pid, "edited": lie(headline_of(state))}).json()
+    assert body["outcome"] == "invalid" and body["attempts_used"] == 0
+    assert "Judges split — no try used" in body["tags"] and not body["round_over"]

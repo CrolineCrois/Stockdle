@@ -81,7 +81,7 @@ class Ruling:
 
 
 REASON_TEXT = {
-    "disagree": "Too close to call — the two judges split on whether that's false, so it doesn't count.",
+    "disagree": "Too close to call — the two judges split on whether that's false, so it doesn't count (and doesn't use a try).",
     "not_false": "Still true — that edit doesn't change a checkable fact.",
     "implausible": "Nobody would believe that{detail}.",
     "ungrammatical": "That doesn't read as a real headline — check the grammar.",
