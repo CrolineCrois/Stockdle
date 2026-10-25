@@ -44,6 +44,8 @@ def queue(db: Session, status: str = "pending", limit: int = 50) -> list[dict]:
             "materiality": a.materiality, "specificity": a.specificity,
             "original_specificity": a.original_specificity,
             "vagueness_flags": json.loads(a.vagueness_flags_json or "[]"),
+            # The ruling: vague only if BOTH judge runs said so (flags are a union).
+            "vague": bool(ruling.get("vague")),
             "judge": ruling.get("judge"), "judge_runs": ruling.get("runs", []),
             "verifier": {"verdict": a.verifier_verdict, "version": a.verifier_version,
                          "probs": json.loads(a.verifier_probs_json or "{}")},

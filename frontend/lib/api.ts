@@ -340,6 +340,7 @@ export interface ReviewItem {
   specificity: number | null;
   original_specificity: number | null;
   vagueness_flags: string[];
+  vague: boolean;
   judge: string;
   judge_runs: { phrasing: string; is_false: boolean; materiality: number; specificity: number; explanation: string }[];
   verifier: { verdict: string; version: string; probs: Record<string, number> };

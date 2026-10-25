@@ -217,7 +217,10 @@ export default function Admin() {
               <p className="mt-3 text-sm text-chalk-faint">{x.original}</p>
               <p className="mt-1 font-semibold">{x.edited}</p>
               {x.vagueness_flags.length > 0 && (
-                <p className="mt-1 text-xs text-danger">vague: {x.vagueness_flags.join('; ')}</p>
+                <p className={`mt-1 text-xs ${x.vague ? 'text-danger' : 'text-chalk-faint'}`}>
+                  {x.vague ? 'Ruled too vague (both judges): ' : 'One judge noted (not ruled vague): '}
+                  {x.vagueness_flags.join('; ')}
+                </p>
               )}
               <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                 {x.judge_runs.map((r) => (
