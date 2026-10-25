@@ -44,7 +44,10 @@ JUDGE_TIMEOUT_S = _env("SIP_JUDGE_TIMEOUT_S", 30.0)
 
 # --- the game --------------------------------------------------------------
 LIVES = _env("SIP_LIVES", 3)
-MAX_ATTEMPTS = _env("SIP_MAX_ATTEMPTS", 3)          # per headline
+# Tries per headline; 0 = unlimited while the clock runs (the default).
+MAX_ATTEMPTS = _env("SIP_MAX_ATTEMPTS", 0)
+# Unlimited tries still cost a judge call each: at least this long between submits.
+MIN_SUBMIT_GAP_S = _env("SIP_MIN_SUBMIT_GAP_S", 1.0)
 MAX_WORD_CHANGES = _env("SIP_MAX_WORD_CHANGES", 3)
 SNEAK_THRESHOLD = _env("SIP_SNEAK_THRESHOLD", 0.5)  # suspicion below this sneaks past
 NEAR_MISS_FROM = _env("SIP_NEAR_MISS_FROM", 0.4)    # "so close!" band: [0.4, 0.5)

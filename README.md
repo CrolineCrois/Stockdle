@@ -39,6 +39,8 @@ preview — on submit the fact-checker searches more evidence and makes the real
    only fails those if both runs flag it.) It also scores:
    - **materiality** 1–5 — would a reader believe something false *and meaningful*?
      Below 3 is **"Too pedantic"**: invalid, no points, no life lost.
+   - An invalid edit costs nothing but time: **tries are unlimited while the clock
+     runs** (one submission per second; `SIP_MAX_ATTEMPTS` sets a cap if you want one).
    - **specificity** 1–5 of the original and the edit, plus **vagueness flags**
      (added "may", "reportedly", "many", unnamed sources…). Dropping specificity by 2+
      or any flag is **"Too vague"**: points ×0.5, or **caught** if specificity ≤ 2.

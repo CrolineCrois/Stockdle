@@ -129,7 +129,10 @@ def test_a_valid_lie_is_judged_scored_and_logged(client):
         assert not att.timed_out and att.time_to_submit_ms == 950
 
 
-def test_three_invalid_attempts_exhaust_the_round_without_losing_a_life(client):
+def test_three_invalid_attempts_exhaust_the_round_without_losing_a_life(client, monkeypatch):
+    from app import config
+    monkeypatch.setattr(config, "MAX_ATTEMPTS", 3)          # the optional cap
+    monkeypatch.setattr(config, "MIN_SUBMIT_GAP_S", 0.0)
     fillers = {"to", "in", "of", "the", "a", "for", "on"}
     for _ in range(30):                     # deal until a headline has a function word
         pid, state = new_run(client)
@@ -457,3 +460,34 @@ def test_a_judge_split_costs_no_try(client, monkeypatch):
                        json={"player_id": pid, "edited": lie(headline_of(state))}).json()
     assert body["outcome"] == "invalid" and body["attempts_used"] == 0
     assert "Judges split — no try used" in body["tags"] and not body["round_over"]
+
+
+
+def test_tries_are_unlimited_but_rate_limited(client, monkeypatch):
+    from app import config
+    monkeypatch.setattr(config, "MIN_SUBMIT_GAP_S", 0.0)
+    fillers = {"to", "in", "of", "the", "for", "on", "at"}
+    for _ in range(40):
+        pid, state = new_run(client, "Unlimited")
+        rid, words = state["round"]["id"], headline_of(state).split()
+        idx = [k for k, w in enumerate(words) if w.lower() in fillers]
+        if len(idx) >= 1:
+            break
+    outcomes = []
+    for n, sub in enumerate(["the", "a", "of", "in", "at"]):
+        w = list(words)
+        w[idx[0]] = sub
+        if " ".join(w) == headline_of(state):
+            continue
+        body = client.post(f"/api/round/{rid}/submit", json={"player_id": pid, "edited": " ".join(w)}).json()
+        if "outcome" not in body:
+            continue
+        outcomes.append(body["outcome"])
+        if body["outcome"] != "invalid":
+            break
+        assert not body["round_over"]                       # no cap: the round goes on
+    assert outcomes and outcomes.count("invalid") >= 1
+    monkeypatch.setattr(config, "MIN_SUBMIT_GAP_S", 60.0)
+    w = list(words); w[idx[0]] = "with"
+    r = client.post(f"/api/round/{rid}/submit", json={"player_id": pid, "edited": " ".join(w)})
+    assert r.status_code in (429, 409)                      # too fast (or round already over)

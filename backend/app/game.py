@@ -11,10 +11,11 @@ is a timeout.
 
 One submission:
 
-    1. The judge runs twice (two phrasings). Invalid -- no life lost, the try is
-       used -- if they disagree, if it isn't false / plausible / grammatical, or
-       if materiality < 3 ("Too pedantic"). A third invalid try ends the round
-       as "exhausted": no life lost, but the streak resets.
+    1. The judge runs twice (two phrasings). Invalid -- no life lost -- if they
+       disagree, if it isn't false / plausible / grammatical, or if materiality
+       < 3 ("Too pedantic"). Tries are unlimited while the clock runs
+       (SIP_MAX_ATTEMPTS caps them; at the cap the round ends as "exhausted",
+       streak reset).
     2. Too vague with specificity <= 2 counts as CAUGHT outright.
     3. Otherwise the evidence verifier decides:
          SUPPORTED  -> snuck    full points, streak + 1   ("Misread evidence!")
@@ -234,6 +235,12 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
         return _timeout(db, run, rnd, player, headline, edited, trace, time_to_submit_ms,
                         verdict=ruling_was)
 
+    # Unlimited tries, but not a firehose of judge calls.
+    last = db.scalar(select(Attempt.created_at).where(Attempt.round_id == rnd.id)
+                     .order_by(Attempt.id.desc()))
+    if not auto and last is not None and (utcnow() - last).total_seconds() < config.MIN_SUBMIT_GAP_S:
+        raise GameError("Easy — one submission per second.", 429)
+
     diff = word_diff(headline.text, edited)
     if auto and not 1 <= diff.num_changes <= config.MAX_WORD_CHANGES:
         # Out of time with nothing legal to submit.
@@ -289,7 +296,7 @@ def submit(db: Session, *, player: Player, rnd: Round, edited: str, trace: list,
             # still doesn't count (the spec's rule) but costs no try.
             rnd.attempts_used -= 1
             tags.append("Judges split — no try used")
-        round_over = rnd.attempts_used >= config.MAX_ATTEMPTS
+        round_over = config.MAX_ATTEMPTS > 0 and rnd.attempts_used >= config.MAX_ATTEMPTS
         if round_over:
             run.streak = 0
             _end_round(db, run, rnd, "exhausted")

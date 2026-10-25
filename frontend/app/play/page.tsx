@@ -134,7 +134,8 @@ export default function Play() {
         // The judge ruled it not a lie; try again on the same clock.
         sound.invalid();
         rejectedRef.current.set(norm(edited), res.verdict.explanation ?? 'Not a lie.');
-        setNotice(`${res.verdict.explanation ?? 'Not a lie.'} (${res.attempts_used}/${res.state.rules.max_attempts} tries used)`);
+        const cap = res.state.rules.max_attempts;
+        setNotice(`${res.verdict.explanation ?? 'Not a lie.'}${cap > 0 ? ` (${res.attempts_used}/${cap} tries used)` : ' Keep trying — tries are unlimited while the clock runs.'}`);
         deadlineRef.current = performance.now() + res.remaining_s * 1000;
         setRemaining(res.remaining_s);
         setPhase('editing');
@@ -342,7 +343,8 @@ export default function Play() {
                   </span>
                 )}
                 <span className="chip">
-                  try {round.attempts_used + 1}/{round.max_attempts}
+                  try {round.attempts_used + 1}
+                  {round.max_attempts > 0 ? `/${round.max_attempts}` : ''}
                 </span>
               </div>
               <h1 className="text-balance text-xl font-bold leading-snug sm:text-2xl">{round.headline.text}</h1>
