@@ -26,9 +26,11 @@ and the edited headline on the same scale.
   sharp lie. Replacing "52-48" with "narrowly", or adding "may" / "reportedly" /
   "some say", lowers it.
 
-vagueness_flags - short notes for every hedge or blur the edit introduced, e.g.
-"added hedge: may", "number replaced with 'many'", "attributed to unnamed sources".
-Empty if none.
+vagueness_flags - short notes ONLY for hedges or blurs the edit introduced that make
+the claim less specific, e.g. "added hedge: may", "number replaced with 'many'",
+"attributed to unnamed sources". Do not use it to describe other changes (a swapped
+word, a deleted word, a changed preposition): those go in the explanation. If you
+add a flag, the edit's specificity must be lower than the original's. Empty if none.
 
 edit_type - the main kind of change: "number", "role swap" (who did what to whom
 reversed), "causal" (a cause or consequence invented or reversed), "temporal"

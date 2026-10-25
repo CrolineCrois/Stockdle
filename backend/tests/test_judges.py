@@ -171,3 +171,14 @@ def test_reason_line_names_a_deleted_word():
         "That doesn't read as a real headline — removing “overtake” breaks the sentence."
     assert reason_line("ungrammatical", "rulers") == \
         "That doesn't read as a real headline — check the grammar."
+
+
+
+def test_a_flag_without_a_specificity_drop_is_not_vague():
+    from judge.base import rule
+    # Both judges noted the change but rated specificity unchanged (4 -> 4).
+    note = dict(specificity=4, original_specificity=4, vagueness_flags=["preposition changed"])
+    r = rule(_v(**note), _v(**note), judge="t", model=None)
+    assert r.valid and not r.vague
+    drop = dict(specificity=1, original_specificity=5, vagueness_flags=["removed 'helium'"])
+    assert rule(_v(**drop), _v(**drop), judge="t", model=None).vague_caught

@@ -145,8 +145,12 @@ def rule(a: Verdict, b: Verdict, *, judge: str, model: str | None, added: str = 
     # Vague = a vagueness flag, or specificity dropping by >= 2 against the SAME
     # run's rating of the original. Like grammar, a split vote is borderline:
     # it only counts as vague if BOTH runs say so.
+    # A flag alone isn't enough: judges also use the field to describe ordinary
+    # changes ("preposition changed") with specificity unchanged. Vague means the
+    # edit really is less specific: flagged AND rated lower, or 2+ points lower.
     def vague_in(v: Verdict) -> bool:
-        return bool(v.vagueness_flags) or (v.original_specificity - v.specificity >= VAGUE_DROP)
+        drop = v.original_specificity - v.specificity
+        return (bool(v.vagueness_flags) and drop >= 1) or drop >= VAGUE_DROP
 
     vague = vague_in(a) and vague_in(b)
     vague_caught = vague and a.specificity <= VAGUE_CAUGHT_AT and b.specificity <= VAGUE_CAUGHT_AT
