@@ -69,7 +69,7 @@ def source_premise(db, headline: Headline) -> str:
     """The source passage that best matches the original headline."""
     passages = db.scalars(select(Passage).where(Passage.headline_id == headline.id)).all()
     if not passages:
-        return headline.snippet or headline.text
+        return headline.snippet or ""     # never the headline itself: that is the answer key
     q = set(tokens(headline.text))
     return max(passages, key=lambda p: (len(q & set(tokens(p.text))), -p.idx)).text
 

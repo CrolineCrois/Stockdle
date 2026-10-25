@@ -27,7 +27,7 @@ def _tokens(text: str) -> set[str]:
 
 def best_passage(headline: Headline, passages: list[Passage]) -> str:
     if not passages:
-        return headline.snippet or headline.text
+        return headline.snippet or ""     # never the headline itself: that is the answer key
     q = _tokens(headline.text)
     return max(passages, key=lambda p: (len(q & _tokens(p.text)), -p.idx)).text
 

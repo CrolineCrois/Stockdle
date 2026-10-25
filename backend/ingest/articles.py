@@ -78,7 +78,10 @@ def run(*, refetch: bool = False) -> dict:
                 time.sleep(PAUSE_S)
             chunks = chunk(body) if len(body) >= MIN_BODY_CHARS else []
             db.execute(delete(Passage).where(Passage.headline_id == h.id))
-            db.add(Passage(headline_id=h.id, idx=0, kind="snippet", text=h.snippet or h.text))
+            # Never index the headline itself: the fact-checker would just find the
+            # true original word for word. No snippet = no snippet passage.
+            if h.snippet and h.snippet.strip() != h.text.strip():
+                db.add(Passage(headline_id=h.id, idx=0, kind="snippet", text=h.snippet))
             for i, text in enumerate(chunks, start=1):
                 db.add(Passage(headline_id=h.id, idx=i, kind="body", text=text))
             stats["with_body" if chunks else "snippet_only"] += 1
