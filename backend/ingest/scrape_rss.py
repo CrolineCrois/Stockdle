@@ -68,7 +68,14 @@ KNOWN_SOURCES = {"bbci.co.uk": "BBC News", "bbc.co.uk": "BBC News", "npr.org": "
                  "pbs.org": "PBS NewsHour", "cbsnews.com": "CBS News",
                  "apnews.com": "AP", "reuters.com": "Reuters", "dw.com": "DW",
                  "france24.com": "France 24", "skynews.com": "Sky News",
-                 "abcnews.go.com": "ABC News", "nytimes.com": "The New York Times"}
+                 "abcnews.go.com": "ABC News", "nytimes.com": "The New York Times",
+                 "latimes.com": "Los Angeles Times", "sciencedaily.com": "ScienceDaily",
+                 "thehindu.com": "The Hindu", "rte.ie": "RTÉ", "euronews.com": "Euronews",
+                 "independent.co.uk": "The Independent", "japantimes.co.jp": "The Japan Times",
+                 "rnz.co.nz": "RNZ", "espn.com": "ESPN", "cnbc.com": "CNBC",
+                 "foxnews.com": "Fox News", "abc.net.au": "ABC Australia", "cbc.ca": "CBC News",
+                 "channelnewsasia.com": "CNA", "techcrunch.com": "TechCrunch",
+                 "theverge.com": "The Verge", "newscientist.com": "New Scientist"}
 
 
 def source_name(feed_url: str, parsed) -> str:
