@@ -84,9 +84,15 @@ def stats(db: Session) -> dict:
         "pending": sum(1 for a in exploits if a.review_status in ("", "pending")),
         "approved": len(approved),
         "rejected": len(reviewed) - len(approved),
-        "target_before_patch_day": 150,
+        "target_before_patch_day": _patch_day_min(),
         # Of the exploits the judge let through, how many did a human agree with?
         "judge_precision": round(len(approved) / len(reviewed), 4) if reviewed else None,
         "decisions_logged": db.query(Review).count(),
         "by_edit_type": [{"edit_type": k, **v} for k, v in sorted(by_type.items())],
     }
+
+
+def _patch_day_min() -> int:
+    """The approvals a verifier patch day actually needs (it refuses with fewer)."""
+    from verifier.patch_day import MIN_EXPLOITS
+    return MIN_EXPLOITS

@@ -6,7 +6,7 @@
  * full, because reviewers must read it -- always under the FAKE label.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import Nav from '@/components/Nav';
 import { adminApi, type ReviewItem, type ReviewStats } from '@/lib/api';
@@ -33,6 +33,8 @@ function Tile({ label, value, sub }: { label: string; value: string | number; su
 
 export default function Admin() {
   const [token, setToken] = useState('');
+  const [cardError, setCardError] = useState<{ id: number; text: string } | null>(null);
+  const reviewerRef = useRef<HTMLInputElement>(null);
   const [reviewer, setReviewer] = useState('');
   const [status, setStatus] = useState('pending');
   const [items, setItems] = useState<ReviewItem[]>([]);
@@ -71,16 +73,20 @@ export default function Admin() {
 
   const decide = async (id: number, decision: 'approved' | 'rejected') => {
     if (!reviewer.trim()) {
-      setError('Enter your reviewer name first — every decision is logged with it.');
+      // Shown on the card that was clicked (the page-level error is out of view).
+      setCardError({ id, text: 'Enter your reviewer name first — every decision is logged with it.' });
+      reviewerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      reviewerRef.current?.focus({ preventScroll: true });
       return;
     }
+    setCardError(null);
     setBusy(id);
     try {
       const r = await adminApi.decide(token, id, decision, reviewer.trim());
       setStats(r.stats);
       setItems((xs) => (status === 'all' ? xs.map((x) => (x.id === id ? { ...x, review_status: decision } : x)) : xs.filter((x) => x.id !== id)));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save.');
+      setCardError({ id, text: e instanceof Error ? e.message : 'Could not save.' });
     } finally {
       setBusy(null);
     }
@@ -113,7 +119,9 @@ export default function Admin() {
           <label className="text-xs text-chalk-dim">
             Reviewer
             <input
+              ref={reviewerRef}
               value={reviewer}
+              placeholder="your name"
               maxLength={40}
               onChange={(e) => setReviewer(e.target.value)}
               className="mt-1 block rounded-lg border border-ink-700 bg-ink-950/70 px-3 py-2 text-sm text-chalk outline-none focus:border-accent/60"
@@ -245,6 +253,7 @@ export default function Admin() {
                   Reject
                 </button>
               </div>
+              {cardError?.id === x.id && <p className="mt-2 text-sm text-danger">{cardError.text}</p>}
             </article>
           ))}
         </div>
