@@ -84,25 +84,32 @@ REASON_TEXT = {
     "disagree": "Too close to call — the two judges split on whether that's false, so it doesn't count (and doesn't use a try).",
     "not_false": "Still true — that edit doesn't change a checkable fact.",
     "implausible": "Nobody would believe that{detail}.",
-    "ungrammatical": "That doesn't read as a real headline — check the grammar.",
+    "ungrammatical": "That doesn't read as a real headline{detail}.",
     "pedantic": "Too pedantic — that barely changes what the headline says.",
     "vague": "Too vague — it swaps something checkable for something fuzzy.",
 }
 
 
-def reason_line(reason: str, added: str = "") -> str:
+def reason_line(reason: str, added: str = "", removed: str = "") -> str:
     """The game's own one-line reason, so it can never contradict the ruling."""
-    # Name the word only when there is a single change; with several, the
+    # Name the words only when there is a single change; with several, the
     # combined words mislead (e.g. a harmless "highlights -> highlight" next to
     # the nonsense), so say "that wording" and let the judge's note point.
+    # A single pure deletion names what was removed.
+    single = "\n" not in added and "\n" not in removed
     detail = ""
     if reason == "implausible":
-        detail = (f" — “{added}” doesn't make sense here" if added and "\n" not in added
+        detail = (f" — “{added}” doesn't make sense here" if added and single
+                  else f" — removing “{removed}” breaks the headline" if removed and single
                   else " — that wording doesn't make sense here")
+    elif reason == "ungrammatical":
+        detail = (f" — removing “{removed}” breaks the sentence" if removed and not added and single
+                  else " — check the grammar")
     return REASON_TEXT[reason].format(detail=detail)
 
 
-def rule(a: Verdict, b: Verdict, *, judge: str, model: str | None, added: str = "") -> Ruling:
+def rule(a: Verdict, b: Verdict, *, judge: str, model: str | None, added: str = "",
+         removed: str = "") -> Ruling:
     """Combine two runs.
 
     Whether the edit is FALSE must be agreed by both runs (the spec's rule). For
@@ -122,7 +129,7 @@ def rule(a: Verdict, b: Verdict, *, judge: str, model: str | None, added: str = 
 
     def invalid(reason: str, by: Verdict) -> Ruling:
         return Ruling(valid=False, reason=reason,
-                      explanation=f"{reason_line(reason, added)} Judge’s note: {by.explanation}", **base)
+                      explanation=f"{reason_line(reason, added, removed)} Judge’s note: {by.explanation}", **base)
 
     if a.is_false != b.is_false:
         return invalid("disagree", a if not a.is_false else b)
@@ -176,5 +183,9 @@ def judge_twice(judge: Judge, original: str, snippet: str, edited: str) -> Rulin
         a, b = fa.result(), fb.result()
     from app.diffing import word_diff
     # One change: its words. Several: newline-joined, which reason_line treats as "several".
-    added = "\n".join(c.after for c in word_diff(original, edited).changes if c.after)
-    return rule(a, b, judge=judge.name, model=getattr(judge, "model", None), added=added)
+    changes = word_diff(original, edited).changes
+    added = "\n".join(c.after for c in changes if c.after)
+    # Removed words only matter for a single pure deletion ("" -> named in reason_line).
+    removed = changes[0].before if len(changes) == 1 and not changes[0].after else ""
+    return rule(a, b, judge=judge.name, model=getattr(judge, "model", None), added=added,
+                removed=removed)

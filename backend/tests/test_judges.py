@@ -160,3 +160,14 @@ def test_reason_line_does_not_name_words_when_several_changed():
     assert reason_line("implausible", "highlight\ngrower's") == \
         "Nobody would believe that — that wording doesn't make sense here."
     assert "“condor”" in reason_line("implausible", "condor")
+
+
+
+def test_reason_line_names_a_deleted_word():
+    from judge.base import reason_line
+    assert reason_line("implausible", removed="overtake") == \
+        "Nobody would believe that — removing “overtake” breaks the headline."
+    assert reason_line("ungrammatical", removed="overtake") == \
+        "That doesn't read as a real headline — removing “overtake” breaks the sentence."
+    assert reason_line("ungrammatical", "rulers") == \
+        "That doesn't read as a real headline — check the grammar."
