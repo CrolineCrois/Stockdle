@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 import uuid
@@ -277,6 +278,40 @@ def timeout(round_id: str, body: TimeoutIn, db: Session = Depends(get_session)) 
         trace=[t.model_dump() for t in body.trace], time_to_submit_ms=body.time_to_submit_ms))
     db.commit()
     return _result_out(db, res, run)
+
+
+class CheckIn(BaseModel):
+    text: str = Field(min_length=10, max_length=5000)
+
+
+class CheckFeedbackIn(BaseModel):
+    text: str = Field(min_length=1, max_length=5000)
+    result: dict
+    feedback: str = Field(pattern="^(right|wrong_true|wrong_false|unsure)$")
+    note: str = Field(default="", max_length=300)
+    player_id: str | None = Field(default=None, max_length=40)
+
+
+@app.post("/api/check")
+def check_post(body: CheckIn, request: Request) -> dict:
+    """Fact-check a pasted post's claims. Nothing is stored."""
+    from app import claimcheck
+    _limit(f"check:{_ip(request)}", config.CHECKS_PER_IP_PER_MIN, 60,
+           "Too many checks from this network — wait a minute.")
+    _limit("check:all", config.CHECKS_PER_HOUR, 3600, "The checker is at its hourly limit — try later.")
+    if re.fullmatch(r"\s*https?://\S+\s*", body.text):
+        raise HTTPException(422, "Paste the post's text, not a link — links aren't fetched.")
+    return claimcheck.check(body.text).to_dict()
+
+
+@app.post("/api/check/feedback")
+def check_feedback(body: CheckFeedbackIn, request: Request, db: Session = Depends(get_session)) -> dict:
+    """Stored only when someone presses a feedback button (their consent)."""
+    from app import claimcheck
+    _limit(f"checkfb:{_ip(request)}", 20, 60, "Too much feedback from this network — wait a minute.")
+    row = claimcheck.save_feedback(db, text=body.text, result=body.result, feedback=body.feedback,
+                                   note=body.note, player_id=body.player_id)
+    return {"ok": True, "id": row.id}
 
 
 @app.get("/api/levels")

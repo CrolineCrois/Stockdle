@@ -8,12 +8,15 @@ separately; ``aggregate`` turns those into one verdict.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from app import config
+
+_INFERENCE_LOCK = threading.Lock()
 
 LABELS = ("supported", "refuted", "nei")
 _NLI_TO_OURS = {"entailment": "supported", "contradiction": "refuted", "neutral": "nei",
@@ -33,6 +36,14 @@ class VerifierModel:
 
     @torch.inference_mode()
     def score(self, claim: str, passages: list[str]) -> list[dict[str, float]]:
+        # One forward pass at a time across the whole server: concurrent
+        # requests each running multi-threaded CPU inference thrash the cores
+        # (and then hold DB connections until the pool runs out). Each call is
+        # ~0.1 s, so a short queue is far faster than contention.
+        with _INFERENCE_LOCK:
+            return self._score(claim, passages)
+
+    def _score(self, claim: str, passages: list[str]) -> list[dict[str, float]]:
         if not passages:
             return []
         enc = self.tokenizer(passages, [claim] * len(passages), truncation="only_first",

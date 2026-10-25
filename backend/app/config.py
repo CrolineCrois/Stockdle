@@ -192,7 +192,13 @@ CORS_ORIGINS = [o for o in _env(
 # Deployed frontends, e.g. "https://.*\.vercel\.app" (regex, on top of the list above).
 CORS_ORIGIN_REGEX = _env("SIP_CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app")
 ADMIN_TOKEN = _env("SIP_ADMIN_TOKEN", "sneak-demo")
-SUSPICION_RATE_PER_S = _env("SIP_SUSPICION_RATE_PER_S", 8.0)   # live-meter calls
+SUSPICION_RATE_PER_S = _env("SIP_SUSPICION_RATE_PER_S", 3.0)   # live-meter calls
+# "Check a post": also pull a few fresh Google News headlines per claim.
+CHECK_FRESH = _env("SIP_CHECK_FRESH", True)
+# The model that decides "Check a post" verdicts: the general-purpose v0 (see claimcheck.check).
+CHECK_MODEL = _env("SIP_CHECK_MODEL", "v0")
+CHECKS_PER_IP_PER_MIN = _env("SIP_CHECKS_PER_IP_PER_MIN", 6)
+CHECKS_PER_HOUR = _env("SIP_CHECKS_PER_HOUR", 600)
 # Public hosting: every submit is two paid judge calls. Per-IP and global caps.
 SUBMITS_PER_IP_PER_MIN = _env("SIP_SUBMITS_PER_IP_PER_MIN", 20)
 PLAYERS_PER_IP_PER_HOUR = _env("SIP_PLAYERS_PER_IP_PER_HOUR", 10)

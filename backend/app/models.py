@@ -263,3 +263,18 @@ class Review(Base):
     decision: Mapped[str] = mapped_column(String(10))          # approved | rejected
     note: Mapped[str] = mapped_column(String(300), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class CheckFeedback(Base):
+    """A "Check a post" result the person said was wrong (or right). Only these
+    are stored; plain checks are not logged."""
+
+    __tablename__ = "check_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    player_id: Mapped[str] = mapped_column(String(40), default="")
+    text: Mapped[str] = mapped_column(Text, default="")
+    result_json: Mapped[str] = mapped_column(Text, default="{}")
+    feedback: Mapped[str] = mapped_column(String(20))      # right | wrong_true | wrong_false | unsure
+    note: Mapped[str] = mapped_column(String(300), default="")

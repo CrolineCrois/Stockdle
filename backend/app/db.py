@@ -18,6 +18,9 @@ engine = create_engine(
     future=True,
     connect_args={"check_same_thread": False, "timeout": 20}
     if config.DB_URL.startswith("sqlite") else {},
+    # Requests hold a session while waiting on the judge or the model queue;
+    # under public load 5+10 connections ran out.
+    pool_size=20, max_overflow=40, pool_timeout=60,
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False,
                             class_=Session, future=True)
