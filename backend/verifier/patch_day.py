@@ -19,6 +19,7 @@ set, and re-flags bounties.
 from __future__ import annotations
 
 import argparse
+import random
 import re
 from datetime import datetime, timezone
 
@@ -31,10 +32,13 @@ from app.models import Attempt, VerifierVersion
 from . import registry
 from .model import aggregate
 from .retrieval import retrieve
-from .train import finetune
+from .train import SETTINGS, finetune
 
 MIN_EXPLOITS = 20
 MAX_FP_RISE = 0.10
+# True headlines per approved lie in training. 1:1 (the lies' own headlines
+# only) taught v1 that nearly everything is false: false alarms 7% -> 36%.
+TRUE_PER_LIE = 4
 
 
 def next_name() -> str:
@@ -61,8 +65,13 @@ def run(*, dry_run: bool = False, min_exploits: int = MIN_EXPLOITS, log=print) -
                 f"(need {min_exploits})"}
     name = next_name()
     live = registry.current()
-    examples = [ex for ex, _ in train] + sets["train_true"]
-    log(f"[patch] {name}: {len(train)} approved exploits + {len(sets['train_true'])} true, "
+    truths = sets["train_true"]
+    more = sets["train_true_more"]
+    random.Random(SETTINGS["seed"]).shuffle(more)
+    truths = truths + more[:max(0, TRUE_PER_LIE * len(train) - len(truths))]
+    examples = [ex for ex, _ in train] + truths
+    random.Random(SETTINGS["seed"]).shuffle(examples)
+    log(f"[patch] {name}: {len(train)} approved exploits + {len(truths)} true, "
         f"from {config.VERIFIER_BASE_MODEL}")
     model = finetune(name, config.VERIFIER_BASE_MODEL, examples,
                      config.DATA_DIR / "verifiers" / name, log=log)

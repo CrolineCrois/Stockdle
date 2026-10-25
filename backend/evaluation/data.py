@@ -112,6 +112,14 @@ def human_sets(include_pending: bool = False) -> dict:
         train_heads = {hid for _, hid in out["train"]}
         out["train_true"] = [Example(premises[hid], next(h.text for h in heads if h.id == hid),
                                      "supported", "", "true") for hid in sorted(train_heads)]
+        # Every other train-side headline, as extra SUPPORTED examples. The
+        # controlled comparison doesn't use these (all its models share
+        # train_true); a patch day does, so a few dozen lies don't teach the
+        # model that everything is false.
+        out["train_true_more"] = [
+            Example(source_premise(db, h), h.text, "supported", "", "true")
+            for h in sorted(heads, key=lambda h: h.id)
+            if sides.get(str(h.id), "train") == "train" and h.id not in train_heads]
         out["split"] = {"seed": split["seed"], "test_fraction": split["test_fraction"],
                         "patch_day_at": split["patch_day_at"],
                         "train_headlines": len(train_heads),
