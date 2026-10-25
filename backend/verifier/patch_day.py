@@ -59,7 +59,10 @@ def run(*, dry_run: bool = False, min_exploits: int = MIN_EXPLOITS, log=print) -
 
     init_db()
     sets = human_sets(include_pending=False)
-    train = sets["train"]
+    # Every approved exploit on a training-side headline, including the ones
+    # that beat the live model since its patch day; likewise for the test side.
+    train = sets["train"] + sets["fresh_train"]
+    sets["test"] = sets["test"] + sets["fresh_test"]
     if len(train) < min_exploits:
         return {"shipped": False, "reason": f"only {len(train)} approved training exploits "
                 f"(need {min_exploits})"}

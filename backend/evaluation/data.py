@@ -91,7 +91,11 @@ def human_sets(include_pending: bool = False) -> dict:
         sides = split["sides"]
         fresh_after = datetime.fromisoformat(split["patch_day_at"]) if split["patch_day_at"] else None
         rows = exploits(db, include_pending)
-        out = {"train": [], "test": [], "fresh": [], "true_test": []}
+        # fresh = played after the last patch day (lies that beat the newest
+        # model). Kept apart for evaluation, and also split by headline side
+        # (fresh_train / fresh_test) so the NEXT patch day can learn from them.
+        out = {"train": [], "test": [], "fresh": [], "fresh_train": [], "fresh_test": [],
+               "true_test": []}
         # Stamp each exploit's evaluation side onto its log row.
         for a, h in rows:
             a.split = ("fresh" if fresh_after and a.created_at > fresh_after
@@ -103,13 +107,14 @@ def human_sets(include_pending: bool = False) -> dict:
             ex = Example(premise, a.edited_headline, "refuted", a.edit_type or "other", "human")
             if fresh_after and a.created_at > fresh_after:
                 out["fresh"].append((ex, h.id))
+                out["fresh_" + sides.get(str(h.id), "train")].append((ex, h.id))
             else:
                 out[sides.get(str(h.id), "train")].append((ex, h.id))
         for h in heads:
             if sides.get(str(h.id)) == "test":
                 out["true_test"].append((Example(premises.setdefault(h.id, source_premise(db, h)),
                                                  h.text, "supported", "", "true"), h.id))
-        train_heads = {hid for _, hid in out["train"]}
+        train_heads = {hid for _, hid in out["train"]}   # the controlled comparison's matched truths
         out["train_true"] = [Example(premises[hid], next(h.text for h in heads if h.id == hid),
                                      "supported", "", "true") for hid in sorted(train_heads)]
         # Every other train-side headline, as extra SUPPORTED examples. The
