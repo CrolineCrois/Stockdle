@@ -155,7 +155,23 @@ function Table({ versions, live }: { versions: LearningVersion[]; live?: Learnin
   );
 }
 
-export default function Scorecard({ data }: { data: LearningSummary }) {
+/** Hide fact-checker numbers measured on different tests (or a different verdict
+ * rule) from the live version: comparing them would mislead. They show as
+ * "still being measured" until rescored on the same tests. */
+function comparable(data: LearningSummary): LearningSummary {
+  const ref = data.verifier.find((v) => v.is_current)?.benchmark?.set;
+  if (!ref) return data;
+  const key = JSON.stringify(ref);
+  return {
+    ...data,
+    verifier: data.verifier.map((v) =>
+      v.benchmark && JSON.stringify(v.benchmark.set) !== key ? { ...v, benchmark: null } : v,
+    ),
+  };
+}
+
+export default function Scorecard({ data: raw }: { data: LearningSummary }) {
+  const data = comparable(raw);
   const [tables, setTables] = useState(false);
   const live = data.verifier.find((v) => v.is_current);
   const liveNow = data.live.find((x) => x.version === live?.name)?.caught;
@@ -220,8 +236,8 @@ export default function Scorecard({ data }: { data: LearningSummary }) {
       </p>
       {data.verifier.some((v) => !v.benchmark) && (
         <p className="mt-2 text-xs text-chalk-faint">
-          Still being measured: {data.verifier.filter((v) => !v.benchmark).map((v) => v.name).join(', ')} — its bars
-          appear when scoring finishes.
+          Being re-measured on the same tests as the live version:{' '}
+          {data.verifier.filter((v) => !v.benchmark).map((v) => v.name).join(', ')} — bars appear when scoring finishes.
         </p>
       )}
       <div className="mt-3">
