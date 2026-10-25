@@ -142,12 +142,11 @@ def rule(a: Verdict, b: Verdict, *, judge: str, model: str | None, added: str = 
     if mat < MIN_MATERIALITY:
         return invalid("pedantic", a if a.materiality <= b.materiality else b)
 
-    # Vague = a vagueness flag, or specificity dropping by >= 2 against the SAME
-    # run's rating of the original. Like grammar, a split vote is borderline:
-    # it only counts as vague if BOTH runs say so.
-    # A flag alone isn't enough: judges also use the field to describe ordinary
-    # changes ("preposition changed") with specificity unchanged. Vague means the
-    # edit really is less specific: flagged AND rated lower, or 2+ points lower.
+    # Vague = the edit really is less specific, judged against the SAME run's
+    # rating of the original: flagged AND rated lower, or 2+ points lower. A flag
+    # alone isn't enough (judges also use it to describe ordinary changes with
+    # specificity unchanged). Like grammar, a split vote is borderline: it only
+    # counts as vague if BOTH runs say so.
     def vague_in(v: Verdict) -> bool:
         drop = v.original_specificity - v.specificity
         return (bool(v.vagueness_flags) and drop >= 1) or drop >= VAGUE_DROP
