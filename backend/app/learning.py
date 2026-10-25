@@ -29,6 +29,7 @@ from verifier import registry as verifiers
 from verifier.model import aggregate
 from verifier.retrieval import retrieve
 
+from . import config
 from .db import SessionLocal, init_db
 from .models import Attempt, DetectorVersion, Headline, SyntheticFake, VerifierVersion
 
@@ -68,16 +69,17 @@ def benchmark_verifier(name: str, force: bool = False) -> dict:
         trues, fakes = _sets(db, ids)
         row = db.scalar(select(VerifierVersion).where(VerifierVersion.name == name))
         metrics = json.loads(row.metrics_json or "{}")
-        key = (len(trues), len(fakes), len(human_test))
+        key = (len(trues), len(fakes), len(human_test), config.VERIFIER_RULE)
         if not force and metrics.get("benchmark", {}).get("set") == list(key):
             return metrics["benchmark"]
     model = verifiers.load(name)
 
-    def refuted(claim: str) -> float:
+    def refuted(claim: str, hid: int) -> float:
         hits = retrieve(claim)
-        return float(aggregate(model.score(claim, [h.text for h in hits]))[0] == "refuted")
+        return float(aggregate(model.score(claim, [h.text for h in hits]),
+                               passage_sources=[h.headline_id for h in hits], source=hid)[0] == "refuted")
 
-    bench = _summary([refuted(c) for c, _ in fakes], [refuted(c) for c, _ in trues], key)
+    bench = _summary([refuted(c, h) for c, h in fakes], [refuted(c, h) for c, h in trues], key)
     # Players' approved lies on headlines no version trains on. They all fooled
     # v0 when played (that's what makes them exploits), so v0 scores near zero
     # by construction; later versions are the honest comparison.

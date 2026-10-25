@@ -46,7 +46,8 @@ def verify(claim: str, source_headline_id: int, mode: str = EVIDENCE,
     hits = retrieve(claim, k or config.VERIFIER_TOP_K,
                     exclude_headline_id=source_headline_id if mode == BREAKING else None)
     per = model.score(claim, [h.text for h in hits])
-    verdict, probs, decisive = aggregate(per)
+    verdict, probs, decisive = aggregate(per, passage_sources=[h.headline_id for h in hits],
+                                         source=source_headline_id)
     passages = [Evidence(h.passage_id, h.headline_id, h.text, h.score, p, i == decisive)
                 for i, (h, p) in enumerate(zip(hits, per))]
     return Verification(verdict, probs, model.name, mode, passages)

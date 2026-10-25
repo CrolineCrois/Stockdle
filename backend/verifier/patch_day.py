@@ -48,9 +48,10 @@ def next_name() -> str:
     return f"v{max(nums, default=0) + 1}-human"
 
 
-def _refuted(model, claim: str) -> bool:
+def _refuted(model, claim: str, source: int | None = None) -> bool:
     hits = retrieve(claim, config.VERIFIER_TOP_K)
-    return aggregate(model.score(claim, [h.text for h in hits]))[0] == "refuted"
+    return aggregate(model.score(claim, [h.text for h in hits]),
+                     passage_sources=[h.headline_id for h in hits], source=source)[0] == "refuted"
 
 
 def run(*, dry_run: bool = False, min_exploits: int = MIN_EXPLOITS, log=print) -> dict:
@@ -102,7 +103,7 @@ def run(*, dry_run: bool = False, min_exploits: int = MIN_EXPLOITS, log=print) -
         rows = db.execute(select(Attempt).where(Attempt.outcome.in_(("snuck", "partial")),
                                                 Attempt.patched_in.is_(None))).scalars().all()
         for a in rows:
-            if _refuted(model, a.edited_headline):
+            if _refuted(model, a.edited_headline, a.headline_id):
                 a.patched_in = name
                 patched += 1
         db.commit()

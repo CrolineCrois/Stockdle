@@ -46,3 +46,13 @@ def test_register_refuses_to_overwrite_the_live_verifier():
     with pytest.raises(ValueError):
         registry.register(registry.current_name(), "/tmp/x", train_data="human", n_train=1,
                           metrics={}, note="", make_current=False)
+
+
+def test_a_source_contradiction_beats_support_from_other_articles():
+    from verifier.model import aggregate
+    per = [{"supported": 0.05, "refuted": 0.80, "nei": 0.15},   # the claim's own article
+           {"supported": 0.95, "refuted": 0.01, "nei": 0.04}]   # another story, unchanged part
+    assert aggregate(per, passage_sources=[7, 9], source=7, rule="source")[0] == "refuted"
+    assert aggregate(per, passage_sources=[7, 9], source=7, rule="strongest")[0] == "supported"
+    # A contradiction from ANOTHER article doesn't get the exception.
+    assert aggregate(per, passage_sources=[8, 9], source=7, rule="source")[0] == "supported"

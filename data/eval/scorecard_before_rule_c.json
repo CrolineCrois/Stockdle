@@ -1,0 +1,88 @@
+{
+ "saved_at": "2026-10-25T05:00:31.261889+00:00",
+ "rule": "strongest",
+ "versions": {
+  "v0": {
+   "benchmark": {
+    "lies_caught": {
+     "value": 0.9014,
+     "lo": 0.831,
+     "hi": 0.9577,
+     "n": 71
+    },
+    "true_flagged": {
+     "value": 0.09,
+     "lo": 0.0691,
+     "hi": 0.1108,
+     "n": 767
+    },
+    "set": [
+     767,
+     71,
+     10
+    ],
+    "human_lies_caught": {
+     "value": 0.1,
+     "lo": 0.0,
+     "hi": 0.3,
+     "n": 10
+    }
+   }
+  },
+  "v1-human": {
+   "previous": "v0",
+   "train_exploits": 27,
+   "holdout_recall_before": {
+    "value": 0.1,
+    "lo": 0.0,
+    "hi": 0.3,
+    "n": 10
+   },
+   "false_positive_before": {
+    "value": 0.0739,
+    "lo": 0.0398,
+    "hi": 0.1193,
+    "n": 176
+   },
+   "holdout_recall_after": {
+    "value": 0.6,
+    "lo": 0.3,
+    "hi": 0.9,
+    "n": 10
+   },
+   "false_positive_after": {
+    "value": 0.1136,
+    "lo": 0.0682,
+    "hi": 0.1648,
+    "n": 176
+   },
+   "benchmark": {
+    "lies_caught": {
+     "value": 0.9014,
+     "lo": 0.831,
+     "hi": 0.9577,
+     "n": 71
+    },
+    "true_flagged": {
+     "value": 0.1173,
+     "lo": 0.0939,
+     "hi": 0.1421,
+     "n": 767
+    },
+    "set": [
+     767,
+     71,
+     10
+    ],
+    "human_lies_caught": {
+     "value": 0.7,
+     "lo": 0.4,
+     "hi": 0.9,
+     "n": 10
+    }
+   }
+  },
+  "eval-synthetic": {},
+  "eval-combined": {}
+ }
+}

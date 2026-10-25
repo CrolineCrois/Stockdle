@@ -63,7 +63,7 @@ export default function Landing() {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
           <p className="label">Hackathon demo · misinformation research</p>
           <h1 className="mt-2 text-balance text-5xl font-black leading-[0.95] tracking-tight sm:text-7xl">
-            Sneak It <span className="text-accent">Past</span>
+            Erm, <span className="text-accent">Akthually</span> <span aria-hidden>🤓</span>
           </h1>
           <p className="mt-4 max-w-xl text-pretty text-lg text-chalk-dim sm:text-xl">
             Edit a true headline into a lie the AI fact-checker can’t catch. Every trick that works

@@ -47,13 +47,19 @@ class VerifierModel:
         return directory
 
 
-def aggregate(per_passage: list[dict[str, float]], decide_at: float | None = None):
+def aggregate(per_passage: list[dict[str, float]], decide_at: float | None = None, *,
+              passage_sources: list[int] | None = None, source: int | None = None,
+              rule: str | None = None):
     """One verdict from per-passage probabilities.
 
     A claim is REFUTED if any passage contradicts it confidently (and more
     strongly than any passage supports it); SUPPORTED if a passage confidently
     supports it; otherwise NOT ENOUGH INFO. Returns (verdict, probs, index of
     the deciding passage or None).
+
+    With rule "source" (config.VERIFIER_RULE), a confident contradiction from a
+    passage of the claim's own source article (``passage_sources[i] == source``)
+    is REFUTED even if another passage supports the claim more strongly.
     """
     t = config.VERIFIER_DECIDE_AT if decide_at is None else decide_at
     if not per_passage:
@@ -63,6 +69,11 @@ def aggregate(per_passage: list[dict[str, float]], decide_at: float | None = Non
     r, s = per_passage[r_i]["refuted"], per_passage[s_i]["supported"]
     if r >= t and r >= s:
         return "refuted", per_passage[r_i], r_i
+    if (rule or config.VERIFIER_RULE) == "source" and passage_sources and source is not None:
+        own = [i for i, h in enumerate(passage_sources) if h == source and per_passage[i]["refuted"] >= t]
+        if own:
+            i = max(own, key=lambda i: per_passage[i]["refuted"])
+            return "refuted", per_passage[i], i
     if s >= t:
         return "supported", per_passage[s_i], s_i
     best = max(range(len(per_passage)), key=lambda i: max(per_passage[i]["supported"],

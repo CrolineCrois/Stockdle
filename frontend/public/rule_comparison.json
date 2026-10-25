@@ -1,0 +1,180 @@
+{
+ "created_at": "2026-10-25T05:00:31.261889+00:00",
+ "rules": {
+  "strongest": "A: strongest contradiction must beat strongest support (original)",
+  "contradiction": "B: any confident contradiction wins",
+  "source": "C: like A, but a confident contradiction from the claim's own source article wins"
+ },
+ "chosen": "source",
+ "note": "Chosen on the same held-out sets it is reported on (6 combinations), so slightly optimistic; live play is the check.",
+ "sets": {
+  "player lies (held out)": {
+   "n": 22,
+   "models": {
+    "v0": {
+     "strongest": {
+      "value": 0.05,
+      "lo": 0.0,
+      "hi": 0.14
+     },
+     "contradiction": {
+      "value": 0.18,
+      "lo": 0.05,
+      "hi": 0.36
+     },
+     "source": {
+      "value": 0.14,
+      "lo": 0.0,
+      "hi": 0.27
+     }
+    },
+    "v1-human": {
+     "strongest": {
+      "value": 0.32,
+      "lo": 0.14,
+      "hi": 0.55
+     },
+     "contradiction": {
+      "value": 0.59,
+      "lo": 0.41,
+      "hi": 0.77
+     },
+     "source": {
+      "value": 0.5,
+      "lo": 0.32,
+      "hi": 0.68
+     }
+    },
+    "v2-human": {
+     "strongest": {
+      "value": 0.23,
+      "lo": 0.09,
+      "hi": 0.41
+     },
+     "contradiction": {
+      "value": 0.5,
+      "lo": 0.27,
+      "hi": 0.73
+     },
+     "source": {
+      "value": 0.45,
+      "lo": 0.27,
+      "hi": 0.64
+     }
+    }
+   }
+  },
+  "machine lies (held out)": {
+   "n": 424,
+   "models": {
+    "v0": {
+     "strongest": {
+      "value": 0.83,
+      "lo": 0.8,
+      "hi": 0.87
+     },
+     "contradiction": {
+      "value": 0.85,
+      "lo": 0.82,
+      "hi": 0.89
+     },
+     "source": {
+      "value": 0.85,
+      "lo": 0.81,
+      "hi": 0.88
+     }
+    },
+    "v1-human": {
+     "strongest": {
+      "value": 0.82,
+      "lo": 0.78,
+      "hi": 0.85
+     },
+     "contradiction": {
+      "value": 0.91,
+      "lo": 0.88,
+      "hi": 0.93
+     },
+     "source": {
+      "value": 0.88,
+      "lo": 0.84,
+      "hi": 0.9
+     }
+    },
+    "v2-human": {
+     "strongest": {
+      "value": 0.77,
+      "lo": 0.73,
+      "hi": 0.81
+     },
+     "contradiction": {
+      "value": 0.87,
+      "lo": 0.84,
+      "hi": 0.9
+     },
+     "source": {
+      "value": 0.85,
+      "lo": 0.81,
+      "hi": 0.88
+     }
+    }
+   }
+  },
+  "true headlines (held out)": {
+   "n": 767,
+   "models": {
+    "v0": {
+     "strongest": {
+      "value": 0.09,
+      "lo": 0.07,
+      "hi": 0.11
+     },
+     "contradiction": {
+      "value": 0.2,
+      "lo": 0.17,
+      "hi": 0.23
+     },
+     "source": {
+      "value": 0.15,
+      "lo": 0.12,
+      "hi": 0.17
+     }
+    },
+    "v1-human": {
+     "strongest": {
+      "value": 0.12,
+      "lo": 0.09,
+      "hi": 0.14
+     },
+     "contradiction": {
+      "value": 0.35,
+      "lo": 0.32,
+      "hi": 0.38
+     },
+     "source": {
+      "value": 0.24,
+      "lo": 0.21,
+      "hi": 0.27
+     }
+    },
+    "v2-human": {
+     "strongest": {
+      "value": 0.03,
+      "lo": 0.02,
+      "hi": 0.05
+     },
+     "contradiction": {
+      "value": 0.23,
+      "lo": 0.21,
+      "hi": 0.26
+     },
+     "source": {
+      "value": 0.14,
+      "lo": 0.11,
+      "hi": 0.16
+     }
+    }
+   }
+  }
+ }
+}

@@ -39,9 +39,10 @@ def ci(values: list[float], stat=np.mean) -> dict:
 def pipeline_verdicts(model: VerifierModel, items: list[tuple[Example, int]]) -> list[str]:
     """Evidence mode: the source article is retrievable, as in a normal round."""
     out = []
-    for ex, _hid in items:
+    for ex, hid in items:
         hits = retrieve(ex.claim, exclude_headline_id=None)
-        verdict, _, _ = aggregate(model.score(ex.claim, [h.text for h in hits]))
+        verdict, _, _ = aggregate(model.score(ex.claim, [h.text for h in hits]),
+                                  passage_sources=[h.headline_id for h in hits], source=hid)
         out.append(verdict)
     return out
 

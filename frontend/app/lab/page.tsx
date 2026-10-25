@@ -26,6 +26,7 @@ import {
 } from 'recharts';
 
 import ChangeList from '@/components/ChangeList';
+import RuleComparison from '@/components/RuleComparison';
 import Nav from '@/components/Nav';
 import { analyticsApi, exploitsApi, versionsApi, type Analytics, type CI, type ExploitRow } from '@/lib/api';
 import { INK, SERIES, pct } from '@/lib/viz';
@@ -454,6 +455,8 @@ export default function Lab() {
                   </div>
                 )}
               </Panel>
+
+              <RuleComparison />
 
               <section className="panel p-4 sm:p-5">
                 <p className="label">Exploit Board</p>
