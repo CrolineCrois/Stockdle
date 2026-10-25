@@ -130,6 +130,11 @@ function Tile({ label, value, sub }: { label: string; value: string | number; su
 
 const pctLabel = (v: number | null) => (v === null || v === undefined ? '' : pct(v));
 const MODEL_ORDER = ['v0', 'v1-synthetic', 'v1-human', 'v1-combined'];
+/** The controlled models, then the shipped live model (e.g. "live (v2-human)") if the run scored it. */
+const modelOrder = (models: Record<string, unknown>) => [
+  ...MODEL_ORDER,
+  ...Object.keys(models).filter((k) => k.startsWith('live')),
+];
 const ciText = (c?: CI) =>
   !c || c.value === null ? '—' : `${pct(c.value)} [${pct(c.lo)}–${pct(c.hi)}] n=${c.n}`;
 /** Rows for a one-metric bar chart with 95% CI whiskers. */
@@ -259,7 +264,7 @@ export default function Lab() {
                   data.evaluation ? (
                     <Table
                       head={['Model', 'Held-out exploits caught', 'Fresh exploits caught', 'True headlines refuted', 'VitaminC macro-F1']}
-                      rows={MODEL_ORDER.filter((m) => data.evaluation!.models[m]).map((m) => {
+                      rows={modelOrder(data.evaluation!.models).filter((m) => data.evaluation!.models[m]).map((m) => {
                         const x = data.evaluation!.models[m];
                         return [m, ciText(x.held_out_exploits.overall), ciText(x.fresh_exploits.overall),
                                 ciText(x.true_headlines.overall), ciText(x.vitaminc.macro_f1)];
@@ -275,7 +280,7 @@ export default function Lab() {
                 ) : (
                   <CIChart
                     name="Held-out exploits caught"
-                    rows={ciRows(MODEL_ORDER.map((m) => [m, data.evaluation!.models[m]?.held_out_exploits.overall]))}
+                    rows={ciRows(modelOrder(data.evaluation!.models).map((m) => [m, data.evaluation!.models[m]?.held_out_exploits.overall]))}
                   />
                 )}
               </Panel>
@@ -287,7 +292,7 @@ export default function Lab() {
                 table={
                   <Table
                     head={['Model', 'True headlines refuted']}
-                    rows={MODEL_ORDER.filter((m) => data.evaluation?.models[m]).map((m) => [m, ciText(data.evaluation!.models[m].true_headlines.overall)])}
+                    rows={modelOrder(data.evaluation?.models ?? {}).filter((m) => data.evaluation?.models[m]).map((m) => [m, ciText(data.evaluation!.models[m].true_headlines.overall)])}
                   />
                 }
               >
@@ -295,7 +300,7 @@ export default function Lab() {
                   <Empty what="No evaluation results yet." />
                 ) : (
                   <CIChart name="True headlines refuted" height={220}
-                    rows={ciRows(MODEL_ORDER.map((m) => [m, data.evaluation!.models[m]?.true_headlines.overall]))} />
+                    rows={ciRows(modelOrder(data.evaluation!.models).map((m) => [m, data.evaluation!.models[m]?.true_headlines.overall]))} />
                 )}
               </Panel>
 
@@ -306,7 +311,7 @@ export default function Lab() {
                 table={
                   <Table
                     head={['Model', 'Macro-F1', 'Accuracy']}
-                    rows={MODEL_ORDER.filter((m) => data.evaluation?.models[m]).map((m) => [m, ciText(data.evaluation!.models[m].vitaminc.macro_f1), ciText(data.evaluation!.models[m].vitaminc.accuracy)])}
+                    rows={modelOrder(data.evaluation?.models ?? {}).filter((m) => data.evaluation?.models[m]).map((m) => [m, ciText(data.evaluation!.models[m].vitaminc.macro_f1), ciText(data.evaluation!.models[m].vitaminc.accuracy)])}
                   />
                 }
               >
@@ -314,7 +319,7 @@ export default function Lab() {
                   <Empty what="No evaluation results yet." />
                 ) : (
                   <CIChart name="VitaminC macro-F1" height={220}
-                    rows={ciRows(MODEL_ORDER.map((m) => [m, data.evaluation!.models[m]?.vitaminc.macro_f1]))} />
+                    rows={ciRows(modelOrder(data.evaluation!.models).map((m) => [m, data.evaluation!.models[m]?.vitaminc.macro_f1]))} />
                 )}
               </Panel>
 

@@ -60,8 +60,14 @@ def run(*, dev: bool = False, vitaminc_n: int = 500, min_train: int = 10,
         raise SystemExit(f"only {len(human_train)} training exploits (need {min_train}); "
                          "approve more on /admin, or use --dev to include pending ones")
     lies_h = [ex for ex, _ in human_train]
-    truths = sets["train_true"]
     n = len(lies_h)
+    # Same balance as patch days: TRUE_PER_LIE true headlines per lie (the
+    # lies' own headlines first, then other train-side ones). At 1:1 every
+    # trained model learned that nearly everything is false.
+    from verifier.patch_day import TRUE_PER_LIE
+    more = list(sets["train_true_more"])
+    random.Random(SETTINGS["seed"]).shuffle(more)
+    truths = sets["train_true"] + more[:max(0, TRUE_PER_LIE * n - len(sets["train_true"]))]
 
     synth: list[Example] = []
     provider = None
@@ -71,6 +77,9 @@ def run(*, dev: bool = False, vitaminc_n: int = 500, min_train: int = 10,
 
     vc = vitaminc(vitaminc_n) if vitaminc_n else []
     models = {"v0": registry.load("v0")}
+    live = registry.current_name()
+    if live != "v0":
+        models[f"live ({live})"] = registry.load(live)     # the shipped patch-day model, for reference
     # Own names ("eval-..."): patch days ship "v1-human", "v2-human", ... and an
     # evaluation run must never overwrite the live fact-checker's files or row.
     models["v1-human"] = _train("eval-human", lies_h, truths, "human", log, epochs)
@@ -82,7 +91,8 @@ def run(*, dev: bool = False, vitaminc_n: int = 500, min_train: int = 10,
                                        "combined", log, epochs)
 
     results = {"created_at": datetime.now(timezone.utc).isoformat(), "dev_data": dev,
-               "base_model": config.VERIFIER_BASE_MODEL, "settings": {**SETTINGS, "epochs": epochs},
+               "base_model": config.VERIFIER_BASE_MODEL, "settings": {**SETTINGS, "epochs": epochs, "true_per_lie": TRUE_PER_LIE},
+               "rule": config.VERIFIER_RULE,
                "retrieval_top_k": config.VERIFIER_TOP_K, "split": sets["split"],
                "counts": {"train_exploits": n, "train_true": len(truths),
                           "synthetic_control": len(synth[:n]),
@@ -92,7 +102,7 @@ def run(*, dev: bool = False, vitaminc_n: int = 500, min_train: int = 10,
     for name, model in models.items():
         log(f"[eval] scoring {name}")
         results["models"][name] = score_all(model, sets, vc)
-        if name != "v0":
+        if name != "v0" and not name.startswith("live"):
             registry.evict(model.name)
 
     out = EVAL_DIR / "results"
