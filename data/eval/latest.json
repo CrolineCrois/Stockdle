@@ -1,26 +1,28 @@
 {
- "created_at": "2026-10-25T03:05:02.477896+00:00",
+ "created_at": "2026-10-25T06:45:28.690061+00:00",
  "dev_data": false,
  "base_model": "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli",
  "settings": {
   "epochs": 3,
   "lr": 1e-05,
   "batch_size": 8,
-  "seed": 7
+  "seed": 7,
+  "true_per_lie": 4
  },
+ "rule": "source",
  "retrieval_top_k": 3,
  "split": {
   "seed": 13,
   "test_fraction": 0.3,
-  "patch_day_at": "2026-10-25T00:29:35.924783",
-  "train_headlines": 24,
+  "patch_day_at": "2026-10-25T05:02:57.720676",
+  "train_headlines": 46,
   "test_headlines": 767
  },
  "counts": {
-  "train_exploits": 27,
-  "train_true": 24,
-  "synthetic_control": 27,
-  "test_exploits": 10,
+  "train_exploits": 51,
+  "train_true": 204,
+  "synthetic_control": 51,
+  "test_exploits": 22,
   "fresh_exploits": 0,
   "true_test": 767,
   "vitaminc": 500
@@ -30,34 +32,34 @@
   "v0": {
    "held_out_exploits": {
     "overall": {
-     "value": 0.1,
+     "value": 0.1364,
      "lo": 0.0,
-     "hi": 0.3,
-     "n": 10
+     "hi": 0.2727,
+     "n": 22
     },
     "by_edit_type": {
      "entity swap": {
-      "value": 0.25,
+      "value": 0.1818,
       "lo": 0.0,
-      "hi": 0.75,
-      "n": 4
+      "hi": 0.4545,
+      "n": 11
      },
      "negation": {
-      "value": 0.0,
-      "lo": 0.0,
-      "hi": 0.0,
+      "value": 1.0,
+      "lo": 1.0,
+      "hi": 1.0,
       "n": 1
      },
      "other": {
       "value": 0.0,
       "lo": 0.0,
       "hi": 0.0,
-      "n": 5
+      "n": 10
      }
     },
     "verdicts": {
-     "supported": 8,
-     "refuted": 1,
+     "supported": 18,
+     "refuted": 3,
      "nei": 1
     }
    },
@@ -77,14 +79,14 @@
    },
    "true_headlines": {
     "overall": {
-     "value": 0.09,
-     "lo": 0.0691,
-     "hi": 0.1108,
+     "value": 0.146,
+     "lo": 0.1213,
+     "hi": 0.1721,
      "n": 767
     },
     "verdicts": {
-     "supported": 618,
-     "refuted": 69,
+     "supported": 575,
+     "refuted": 112,
      "nei": 80
     }
    },
@@ -103,20 +105,20 @@
     }
    }
   },
-  "v1-human": {
+  "live (v2-human)": {
    "held_out_exploits": {
     "overall": {
-     "value": 0.7,
-     "lo": 0.4,
-     "hi": 0.9,
-     "n": 10
+     "value": 0.4545,
+     "lo": 0.2716,
+     "hi": 0.6364,
+     "n": 22
     },
     "by_edit_type": {
      "entity swap": {
-      "value": 1.0,
-      "lo": 1.0,
-      "hi": 1.0,
-      "n": 4
+      "value": 0.4545,
+      "lo": 0.1818,
+      "hi": 0.7273,
+      "n": 11
      },
      "negation": {
       "value": 1.0,
@@ -126,15 +128,15 @@
      },
      "other": {
       "value": 0.4,
-      "lo": 0.0,
-      "hi": 0.8,
-      "n": 5
+      "lo": 0.1,
+      "hi": 0.7,
+      "n": 10
      }
     },
     "verdicts": {
-     "supported": 2,
-     "refuted": 7,
-     "nei": 1
+     "supported": 12,
+     "refuted": 10,
+     "nei": 0
     }
    },
    "fresh_exploits": {
@@ -153,28 +155,104 @@
    },
    "true_headlines": {
     "overall": {
-     "value": 0.2295,
-     "lo": 0.2007,
-     "hi": 0.2595,
+     "value": 0.1356,
+     "lo": 0.1121,
+     "hi": 0.1604,
      "n": 767
     },
     "verdicts": {
-     "supported": 551,
-     "refuted": 176,
-     "nei": 40
+     "supported": 663,
+     "refuted": 104,
+     "nei": 0
     }
    },
    "vitaminc": {
     "accuracy": {
-     "value": 0.682,
-     "lo": 0.646,
-     "hi": 0.724,
+     "value": 0.69,
+     "lo": 0.652,
+     "hi": 0.73,
      "n": 500
     },
     "macro_f1": {
-     "value": 0.6597,
-     "lo": 0.6185,
-     "hi": 0.7039,
+     "value": 0.6077,
+     "lo": 0.5664,
+     "hi": 0.6509,
+     "n": 500
+    }
+   }
+  },
+  "v1-human": {
+   "held_out_exploits": {
+    "overall": {
+     "value": 0.5909,
+     "lo": 0.4091,
+     "hi": 0.7727,
+     "n": 22
+    },
+    "by_edit_type": {
+     "entity swap": {
+      "value": 0.6364,
+      "lo": 0.3636,
+      "hi": 0.9091,
+      "n": 11
+     },
+     "negation": {
+      "value": 1.0,
+      "lo": 1.0,
+      "hi": 1.0,
+      "n": 1
+     },
+     "other": {
+      "value": 0.5,
+      "lo": 0.2,
+      "hi": 0.8,
+      "n": 10
+     }
+    },
+    "verdicts": {
+     "supported": 9,
+     "refuted": 13,
+     "nei": 0
+    }
+   },
+   "fresh_exploits": {
+    "overall": {
+     "value": null,
+     "lo": null,
+     "hi": null,
+     "n": 0
+    },
+    "by_edit_type": {},
+    "verdicts": {
+     "supported": 0,
+     "refuted": 0,
+     "nei": 0
+    }
+   },
+   "true_headlines": {
+    "overall": {
+     "value": 0.2256,
+     "lo": 0.1955,
+     "hi": 0.2555,
+     "n": 767
+    },
+    "verdicts": {
+     "supported": 594,
+     "refuted": 173,
+     "nei": 0
+    }
+   },
+   "vitaminc": {
+    "accuracy": {
+     "value": 0.716,
+     "lo": 0.678,
+     "hi": 0.754,
+     "n": 500
+    },
+    "macro_f1": {
+     "value": 0.6534,
+     "lo": 0.607,
+     "hi": 0.695,
      "n": 500
     }
    }
@@ -182,17 +260,17 @@
   "v1-synthetic": {
    "held_out_exploits": {
     "overall": {
-     "value": 0.1,
-     "lo": 0.0,
-     "hi": 0.3,
-     "n": 10
+     "value": 0.2273,
+     "lo": 0.0909,
+     "hi": 0.4091,
+     "n": 22
     },
     "by_edit_type": {
      "entity swap": {
-      "value": 0.25,
-      "lo": 0.0,
-      "hi": 0.75,
-      "n": 4
+      "value": 0.3636,
+      "lo": 0.0909,
+      "hi": 0.6364,
+      "n": 11
      },
      "negation": {
       "value": 0.0,
@@ -201,16 +279,16 @@
       "n": 1
      },
      "other": {
-      "value": 0.0,
+      "value": 0.1,
       "lo": 0.0,
-      "hi": 0.0,
-      "n": 5
+      "hi": 0.3,
+      "n": 10
      }
     },
     "verdicts": {
-     "supported": 8,
-     "refuted": 1,
-     "nei": 1
+     "supported": 17,
+     "refuted": 5,
+     "nei": 0
     }
    },
    "fresh_exploits": {
@@ -229,28 +307,28 @@
    },
    "true_headlines": {
     "overall": {
-     "value": 0.1499,
-     "lo": 0.1251,
-     "hi": 0.176,
+     "value": 0.103,
+     "lo": 0.0821,
+     "hi": 0.1252,
      "n": 767
     },
     "verdicts": {
-     "supported": 627,
-     "refuted": 115,
-     "nei": 25
+     "supported": 688,
+     "refuted": 79,
+     "nei": 0
     }
    },
    "vitaminc": {
     "accuracy": {
-     "value": 0.718,
-     "lo": 0.68,
-     "hi": 0.758,
+     "value": 0.706,
+     "lo": 0.664,
+     "hi": 0.744,
      "n": 500
     },
     "macro_f1": {
-     "value": 0.6908,
-     "lo": 0.6498,
-     "hi": 0.7311,
+     "value": 0.6202,
+     "lo": 0.5744,
+     "hi": 0.6656,
      "n": 500
     }
    }
@@ -258,17 +336,17 @@
   "v1-combined": {
    "held_out_exploits": {
     "overall": {
-     "value": 0.4,
-     "lo": 0.1,
-     "hi": 0.7,
-     "n": 10
+     "value": 0.5,
+     "lo": 0.3182,
+     "hi": 0.6818,
+     "n": 22
     },
     "by_edit_type": {
      "entity swap": {
-      "value": 0.25,
-      "lo": 0.0,
-      "hi": 0.75,
-      "n": 4
+      "value": 0.4545,
+      "lo": 0.1818,
+      "hi": 0.7273,
+      "n": 11
      },
      "negation": {
       "value": 1.0,
@@ -277,16 +355,16 @@
       "n": 1
      },
      "other": {
-      "value": 0.4,
-      "lo": 0.0,
+      "value": 0.5,
+      "lo": 0.2,
       "hi": 0.8,
-      "n": 5
+      "n": 10
      }
     },
     "verdicts": {
-     "supported": 5,
-     "refuted": 4,
-     "nei": 1
+     "supported": 11,
+     "refuted": 11,
+     "nei": 0
     }
    },
    "fresh_exploits": {
@@ -305,28 +383,28 @@
    },
    "true_headlines": {
     "overall": {
-     "value": 0.1825,
+     "value": 0.1812,
      "lo": 0.1551,
      "hi": 0.2099,
      "n": 767
     },
     "verdicts": {
-     "supported": 593,
-     "refuted": 140,
-     "nei": 34
+     "supported": 628,
+     "refuted": 139,
+     "nei": 0
     }
    },
    "vitaminc": {
     "accuracy": {
-     "value": 0.708,
-     "lo": 0.67,
-     "hi": 0.75,
+     "value": 0.692,
+     "lo": 0.654,
+     "hi": 0.73,
      "n": 500
     },
     "macro_f1": {
-     "value": 0.6797,
-     "lo": 0.638,
-     "hi": 0.7237,
+     "value": 0.6149,
+     "lo": 0.5689,
+     "hi": 0.659,
      "n": 500
     }
    }
