@@ -97,7 +97,8 @@ on CPU (~0.25 s per verification, on submit only).
 
 | Command | What it does |
 |---|---|
-| `npm run scrape` / `npm run articles` | New headlines from RSS / their article bodies as evidence passages |
+| `npm run refresh` | New headlines end to end: scrape RSS → fetch article bodies → LLM-screen for a checkable fact → re-flag bounties |
+| `npm run scrape` / `articles` / `screen` | The same steps one at a time |
 | `npm run dev` | API + web app |
 | `npm run evaluate` | The controlled comparison (below); `-- --dev` includes unreviewed exploits, for testing only |
 | `npm run patch-day` | Retrain the verifier on approved exploits → `v<n>-human`, gated (`-- --dry-run`) |

@@ -121,6 +121,14 @@ const tasks = {
   'patch-day': () => run(py(), ['-m', 'verifier.patch_day', ...process.argv.slice(3)], { cwd: BACKEND }),
   'patch-style': () => run(py(), ['-m', 'detector.patch_day', ...process.argv.slice(3)], { cwd: BACKEND }),
   articles: () => run(py(), ['-m', 'ingest.articles'], { cwd: BACKEND }),
+  screen: () => run(py(), ['-m', 'ingest.screen'], { cwd: BACKEND }),
+  /** New headlines end to end: scrape, fetch their articles, screen them, re-flag bounties. */
+  async refresh() {
+    await run(py(), ['-m', 'ingest.scrape_rss'], { cwd: BACKEND });
+    await run(py(), ['-m', 'ingest.articles'], { cwd: BACKEND });
+    await run(py(), ['-m', 'ingest.screen'], { cwd: BACKEND });
+    await run(py(), ['-m', 'detector.bounties'], { cwd: BACKEND });
+  },
   evaluate: () => run(py(), ['-m', 'evaluation.run', ...process.argv.slice(3)], { cwd: BACKEND }),
   bounties: () => run(py(), ['-m', 'detector.bounties'], { cwd: BACKEND }),
   test: () => run(py(), ['-m', 'pytest'], { cwd: BACKEND }),

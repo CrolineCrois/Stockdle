@@ -91,11 +91,13 @@ def next_round(db: Session, run: Run) -> Round:
     # Prefer headlines whose article body was fetched: with only the one-line
     # snippet (paywalled or blocked sites) the verifier mostly says "not enough
     # info". Fall back to snippet-only headlines, then to anything.
+    # And prefer headlines the LLM screen rated as having a checkable fact to twist
+    # (ingest.screen); feature/opinion headlines are dealt only as a last resort.
     with_body = select(Passage.headline_id).where(Passage.kind == "body")
-    pool = set(db.scalars(select(Headline.id).where(Headline.active)
-                          .where(Headline.id.in_(with_body))).all())
-    if not pool:
-        pool = set(db.scalars(select(Headline.id).where(Headline.active)).all())
+    base = select(Headline.id).where(Headline.active)
+    pool = (set(db.scalars(base.where(Headline.id.in_(with_body), Headline.checkable.is_not(False))).all())
+            or set(db.scalars(base.where(Headline.id.in_(with_body))).all())
+            or set(db.scalars(base).all()))
     # Prefer headlines this player has never seen, in any run; then ones not seen
     # this run; repeat only when the whole pool is used up.
     seen_ever = set(db.scalars(select(Round.headline_id).join(Run, Run.id == Round.run_id)

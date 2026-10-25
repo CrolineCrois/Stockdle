@@ -17,6 +17,8 @@
     "patch-day": "node scripts/tasks.mjs patch-day",
     "patch-style": "node scripts/tasks.mjs patch-style",
     "articles": "node scripts/tasks.mjs articles",
+    "screen": "node scripts/tasks.mjs screen",
+    "refresh": "node scripts/tasks.mjs refresh",
     "evaluate": "node scripts/tasks.mjs evaluate",
     "bounties": "node scripts/tasks.mjs bounties",
     "test": "node scripts/tasks.mjs test",

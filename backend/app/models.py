@@ -44,6 +44,11 @@ class Headline(Base):
     # *before* any edit -- sneaking a lie past it there is genuinely hard.
     is_bounty: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     detector_p: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # LLM screen (ingest.screen): does it state a concrete, checkable fact a
+    # 1-3 word edit could make false? None = not screened yet. Feature-story
+    # headlines ("When lawsuits become a political weapon") fail and are dealt last.
+    checkable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    checkable_reason: Mapped[str] = mapped_column(String(200), default="")
 
 
 class Player(Base):
