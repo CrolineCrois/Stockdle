@@ -108,6 +108,61 @@ function VersionChart({ rows, withLive }: { rows: any[]; withLive: boolean }) {
   );
 }
 
+/**
+ * Overall accuracy on everyday headlines: the average of "lies caught" and
+ * "true headlines correctly left alone", i.e. accuracy on a test that is half
+ * lies, half true. Uses only the unbiased sets (AI-written lies, true
+ * headlines). Range: normal approximation from the two set sizes.
+ */
+function overall(v: LearningVersion) {
+  const b = v.benchmark;
+  if (!b || b.lies_caught.value == null || b.true_flagged.value == null) return null;
+  const caught = b.lies_caught.value;
+  const correctTrue = 1 - b.true_flagged.value;
+  const value = (caught + correctTrue) / 2;
+  const se = Math.sqrt(caught * (1 - caught) / b.lies_caught.n + correctTrue * (1 - correctTrue) / b.true_flagged.n) / 2;
+  return { value, lo: Math.max(0, value - 1.96 * se), hi: Math.min(1, value + 1.96 * se) };
+}
+
+function OverallChart({ versions }: { versions: LearningVersion[] }) {
+  const rows = versions.map((v) => {
+    const o = overall(v);
+    return {
+      name: v.is_current ? `${v.name} (live)` : v.name,
+      value: o?.value ?? null,
+      err: o ? [o.value - o.lo, o.hi - o.value] : null,
+    };
+  });
+  return (
+    <div className="h-52">
+      <ResponsiveContainer>
+        <BarChart data={rows} margin={{ top: 22, right: 8, left: -12, bottom: 0 }}>
+          <CartesianGrid stroke={INK.grid} vertical={false} />
+          <XAxis dataKey="name" {...AXIS} />
+          <YAxis {...AXIS} domain={[0, 1]} tickFormatter={(v: number) => pct(v)} />
+          <Tooltip
+            cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+            content={({ active, payload, label }: any) =>
+              active && payload?.length ? (
+                <div className="rounded-lg border border-ink-600 bg-ink-950/95 px-3 py-2 text-xs">
+                  <p className="font-semibold text-chalk">{label}</p>
+                  <p className="mt-1 text-chalk-dim">
+                    Right on <span className="num text-chalk">{pct(payload[0].value)}</span> of everyday headlines
+                  </p>
+                </div>
+              ) : null
+            }
+          />
+          <Bar dataKey="value" fill={INK.secondary} radius={END} maxBarSize={72}>
+            <ErrorBar dataKey="err" width={5} stroke={INK.primary} />
+            <LabelList dataKey="value" position="top" offset={12} formatter={(v: number) => pct(v)} fill={INK.primary} fontSize={12} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 function rowsFor(versions: LearningVersion[]) {
   return versions.map((v) => {
     const l = v.benchmark?.human_lies_caught;
@@ -223,6 +278,40 @@ export default function Scorecard({ data: raw }: { data: LearningSummary }) {
             <>Right now it catches your lies about as well as AI-written ones.</>
           )}
         </p>
+      )}
+
+      <h3 className="mt-6 font-bold">Overall accuracy on everyday headlines</h3>
+      <p className="mt-1 text-sm text-chalk-dim">
+        How often each version gets it right on a mix of half true headlines and half AI-written lies — none of
+        them picked against any version. Higher is better. This is the “general success rate”; the chart below
+        breaks it down and adds the hard player lies.
+      </p>
+      {tables ? (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-chalk-faint">
+                <th className="py-2 font-medium">Version</th>
+                <th className="py-2 font-medium">Overall accuracy</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.verifier.map((v) => {
+                const o = overall(v);
+                return (
+                  <tr key={v.name} className="border-t border-ink-800">
+                    <td className="py-2 font-semibold">{v.name}</td>
+                    <td className="num py-2 text-chalk-dim">{o ? `${pct(o.value)} [${pct(o.lo)}–${pct(o.hi)}]` : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="mt-3">
+          <OverallChart versions={data.verifier.filter((v) => v.benchmark)} />
+        </div>
       )}
 
       <h3 className="mt-6 font-bold">The fact-checker, version by version</h3>
