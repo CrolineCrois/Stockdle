@@ -55,3 +55,11 @@ def test_check_endpoint_rejects_bare_links_and_stores_nothing(client, monkeypatc
     assert ok.status_code == 200
     with SessionLocal() as db:
         assert db.query(CheckFeedback).count() == before + 1
+
+
+def test_a_passage_about_another_place_cannot_decide():
+    from app.claimcheck import names, on_topic
+    n = names("Police arrested over 500 protesters in Paris today.")
+    assert n == {"paris"}
+    assert not on_topic(n, "Dozens arrested in the Albanian capital Tirana.")
+    assert on_topic(n, "Parisian police detained nearly 1,000 people.")

@@ -68,6 +68,7 @@ class Passage:
     kind: str                      # "game" (our corpus) | "fresh" (Google News)
     probs: dict[str, float] = field(default_factory=dict)
     decisive: bool = False
+    on_topic: bool = True          # mentions one of the claim's names/places
 
 
 @dataclass
@@ -126,9 +127,10 @@ def extract_claims(text: str) -> tuple[list[str], str]:
         text_ = str(c.get("claim", "")).strip() if isinstance(c, dict) else ""
         if text_:
             (claims if c.get("factual") else skipped).append(text_)
-    note = str(out.get("note", ""))[:300]
-    if skipped:
-        note = (note + " " if note else "") + "Not checked (opinion, not a fact): " + "; ".join(skipped)
+    # Our own plain line when something was skipped; the model's note only
+    # when it found nothing at all (it explains why).
+    note = ("Not checked (opinion, not a fact): " + "; ".join(skipped) if skipped
+            else "" if claims else str(out.get("note", ""))[:300])
     return claims[:MAX_CLAIMS], note[:600]
 
 
@@ -183,6 +185,35 @@ def local_evidence(claim: str) -> list[Passage]:
 
 
 # --- 3. verdicts ------------------------------------------------------------
+_STOP_CAPS = {"The", "A", "An", "This", "That", "These", "Those", "It", "He", "She", "They", "We",
+              "BREAKING", "Breaking", "Today", "Yesterday", "Police", "Officials", "Government",
+              "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+              "January", "February", "March", "April", "May", "June", "July", "August",
+              "September", "October", "November", "December"}
+# Nationality -> country stem, so "French cities" is on topic with "France".
+_DEMONYMS = {"french": "fran", "british": "brit", "american": "amer", "chinese": "chin",
+             "russian": "russ", "israeli": "isra", "ukrainian": "ukra", "german": "germ",
+             "iranian": "iran", "indian": "indi", "palestinian": "pale", "spanish": "spai",
+             "italian": "ital", "japanese": "japa", "mexican": "mexi", "canadian": "cana",
+             "australian": "aust", "brazilian": "braz", "turkish": "turk", "polish": "pola",
+             "dutch": "neth", "swedish": "swed", "korean": "kore", "egyptian": "egyp"}
+
+
+def names(claim: str) -> set[str]:
+    """Capitalised names and places in a claim ("Paris", "Macron", "France")."""
+    words = re.findall(r"\b[A-Z][\w'’-]+", claim)
+    return {w.lower() for w in words if w not in _STOP_CAPS and len(w) > 2}
+
+
+def on_topic(claim_names: set[str], passage: str) -> bool:
+    """Same story? An NLI model reads "arrests in Tirana" as contradicting
+    "arrests in Paris", so a passage must mention one of the claim's names
+    (by its first 4 letters, so "Paris" matches "Parisian") to decide."""
+    if not claim_names:
+        return True
+    low = passage.lower()
+    return any(n[:4] in low or (n in _DEMONYMS and _DEMONYMS[n] in low) for n in claim_names)
+
 def check(text: str, *, fresh: bool | None = None, scorer=None) -> CheckResult:
     """The verdict comes from the general-purpose checker (config.CHECK_MODEL,
     default v0). Game-trained versions are specialists in headline edits: they
@@ -202,16 +233,19 @@ def check(text: str, *, fresh: bool | None = None, scorer=None) -> CheckResult:
     for claim in claims:
         passages = local_evidence(claim) + (fresh_evidence(claim) if fresh else [])
         per = score(claim, [p.text for p in passages]) if passages else []
+        cn = names(claim)
         for p, pr in zip(passages, per):
             p.probs = pr
-        # No "source article" here, so the plain rule: the strongest contradiction
-        # must beat the strongest support.
-        verdict, probs, i = aggregate(per, rule="strongest")
-        if i is not None:
-            passages[i].decisive = True
+            p.on_topic = on_topic(cn, p.text)
+        # Only same-story passages decide. No "source article" here, so the plain
+        # rule: the strongest contradiction must beat the strongest support.
+        keep = [k for k, p in enumerate(passages) if p.on_topic]
+        verdict, probs, j = aggregate([per[k] for k in keep], rule="strongest")
+        if j is not None:
+            passages[keep[j]].decisive = True
         second = ""
-        if trained is not None and passages:
-            second = aggregate(trained.score(claim, [p.text for p in passages]), rule="strongest")[0]
+        if trained is not None and keep:
+            second = aggregate(trained.score(claim, [passages[k].text for k in keep]), rule="strongest")[0]
         results.append(ClaimResult(claim, verdict, probs, passages, second,
                                    trained.name if trained else ""))
     return CheckResult(results, note, getattr(model, "name", "test"), bool(fresh))

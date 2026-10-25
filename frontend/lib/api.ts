@@ -441,3 +441,39 @@ export const levelsApi = {
 export const learningApi = {
   get: () => request<LearningSummary>('/api/learning'),
 };
+
+// --- Check a post -------------------------------------------------------------
+export interface CheckPassage {
+  text: string;
+  source: string;
+  url: string;
+  kind: 'game' | 'fresh';
+  probs: Record<string, number>;
+  decisive: boolean;
+  /** Mentions one of the claim's names or places; only these decide the verdict. */
+  on_topic: boolean;
+}
+
+export interface CheckClaim {
+  claim: string;
+  verdict: 'refuted' | 'supported' | 'nei';
+  probs: Record<string, number>;
+  passages: CheckPassage[];
+  trained_verdict: string;
+  trained_model: string;
+}
+
+export interface CheckResult {
+  claims: CheckClaim[];
+  note: string;
+  model: string;
+  fresh: boolean;
+}
+
+export type CheckFeedback = 'right' | 'wrong_true' | 'wrong_false' | 'unsure';
+
+export const checkApi = {
+  check: (text: string) => post<CheckResult>('/api/check', { text }),
+  feedback: (text: string, result: CheckResult, feedback: CheckFeedback, note = '', playerId?: string) =>
+    post<{ ok: boolean; id: number }>('/api/check/feedback', { text, result, feedback, note, player_id: playerId }),
+};
