@@ -30,7 +30,13 @@ const LEGEND = {
   wrapperStyle: { fontSize: 12 },
   formatter: (v: string) => <span style={{ color: INK.secondary }}>{v}</span>,
 };
-const err = (c?: CI | null) => (c && c.value !== null ? [c.value - (c.lo ?? c.value), (c.hi ?? c.value) - c.value] : [0, 0]);
+// null when there's no range to draw: a zero-width whisker renders duplicate
+// line segments, which Recharts keys by coordinates (duplicate-key warning).
+const err = (c?: CI | null) => {
+  if (!c || c.value === null) return null;
+  const e = [c.value - (c.lo ?? c.value), (c.hi ?? c.value) - c.value];
+  return e[0] > 0 || e[1] > 0 ? e : null;
+};
 const ciText = (c?: CI | null) => (!c || c.value === null ? '—' : `${pct(c.value)} [${pct(c.lo)}–${pct(c.hi)}], n=${c.n}`);
 
 function Tip({ active, payload, label }: any) {

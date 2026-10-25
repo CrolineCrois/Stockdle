@@ -135,7 +135,11 @@ const ciText = (c?: CI) =>
 const ciRows = (items: [string, CI | undefined][]) =>
   items
     .filter(([, c]) => c && c.value !== null)
-    .map(([name, c]) => ({ name, value: c!.value, err: [c!.value! - c!.lo!, c!.hi! - c!.value!], n: c!.n }));
+    .map(([name, c]) => {
+      const e = [c!.value! - (c!.lo ?? c!.value!), (c!.hi ?? c!.value!) - c!.value!];
+      // No whisker for a zero-width interval (duplicate-key warning in Recharts).
+      return { name, value: c!.value, err: e[0] > 0 || e[1] > 0 ? e : null, n: c!.n };
+    });
 
 function CIChart({ rows, height = 240, name }: { rows: ReturnType<typeof ciRows>; height?: number; name: string }) {
   return (
