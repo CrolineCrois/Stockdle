@@ -44,8 +44,9 @@ def queue(db: Session, status: str = "pending", limit: int = 50) -> list[dict]:
             "materiality": a.materiality, "specificity": a.specificity,
             "original_specificity": a.original_specificity,
             "vagueness_flags": json.loads(a.vagueness_flags_json or "[]"),
-            # The ruling: vague only if BOTH judge runs said so (flags are a union).
-            "vague": bool(ruling.get("vague")),
+            # Vague under the CURRENT rule (both judge runs must say so), re-applied
+            # to the stored runs: older rulings counted one run's flag as enough.
+            "vague": _vague_now(ruling),
             "judge": ruling.get("judge"), "judge_runs": ruling.get("runs", []),
             "verifier": {"verdict": a.verifier_verdict, "version": a.verifier_version,
                          "probs": json.loads(a.verifier_probs_json or "{}")},
@@ -98,3 +99,14 @@ def _patch_day_min() -> int:
     """The approvals a verifier patch day actually needs (it refuses with fewer)."""
     from verifier.patch_day import MIN_EXPLOITS
     return MIN_EXPLOITS
+
+
+
+def _vague_now(ruling: dict) -> bool:
+    from judge.base import VAGUE_DROP
+    runs = ruling.get("runs") or []
+    if len(runs) < 2:
+        return bool(ruling.get("vague"))
+    return all(bool(r.get("vagueness_flags")) or
+               (r.get("original_specificity", r.get("specificity", 0)) - r.get("specificity", 0) >= VAGUE_DROP)
+               for r in runs)
