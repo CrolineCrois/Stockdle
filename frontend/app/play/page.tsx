@@ -124,7 +124,7 @@ export default function Play() {
             setToasts([...byVersion].map(([v, n], i) => ({
               id: Date.now() + i,
               title: `🛠 Patch ${v} closed ${n} of your exploit${n === 1 ? '' : 's'}`,
-              body: 'The detector learned your trick. Find a new one.',
+              body: 'The fact-checker learned your trick. Find a new one.',
               tone: 'ai' as const,
             })));
           })

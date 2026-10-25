@@ -27,7 +27,7 @@ import {
 
 import ChangeList from '@/components/ChangeList';
 import Nav from '@/components/Nav';
-import { analyticsApi, exploitsApi, type Analytics, type CI, type ExploitRow } from '@/lib/api';
+import { analyticsApi, exploitsApi, versionsApi, type Analytics, type CI, type ExploitRow } from '@/lib/api';
 import { INK, SERIES, pct } from '@/lib/viz';
 
 const AXIS = { stroke: INK.axis, tick: { fill: INK.muted, fontSize: 12 }, tickLine: false } as const;
@@ -163,10 +163,12 @@ function CIChart({ rows, height = 240, name }: { rows: ReturnType<typeof ciRows>
 export default function Lab() {
   const [judge, setJudge] = useState<'all' | 'real'>('all');
   const [data, setData] = useState<Analytics | null>(null);
+  const [liveVerifier, setLiveVerifier] = useState<string | null>(null);
   const [top, setTop] = useState<ExploitRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
+    versionsApi.verifier().then((v) => setLiveVerifier(v.current)).catch(() => undefined);
     analyticsApi.get(judge).then(setData).catch((e) => setError(e instanceof Error ? e.message : 'Could not load.'));
     exploitsApi.list(5).then((r) => setTop(r.rows)).catch(() => undefined);
   }, [judge]);
@@ -217,10 +219,10 @@ export default function Lab() {
             <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <Tile label="Rounds played" value={data.totals.rounds_played} />
               <Tile label="Attempts logged" value={data.totals.attempts} />
-              <Tile label="Exploits found" value={data.totals.exploits} sub="snuck past the detector" />
+              <Tile label="Exploits found" value={data.totals.exploits} sub="snuck past the fact-checker" />
               <Tile label="Zero-days" value={data.totals.zero_days} sub="novel tricks" />
               <Tile label="Exploits patched" value={data.totals.patched} sub="caught by a later version" />
-              <Tile label="Live detector" value={data.totals.current_detector} sub={`${data.totals.players} player${data.totals.players === 1 ? '' : 's'}`} />
+              <Tile label="Live fact-checker" value={liveVerifier ?? '…'} sub={`${data.totals.players} player${data.totals.players === 1 ? '' : 's'}`} />
             </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-2">

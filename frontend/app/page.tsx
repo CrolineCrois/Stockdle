@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import Nav from '@/components/Nav';
-import { api } from '@/lib/api';
+import { api, versionsApi } from '@/lib/api';
 import { readPlayer, signIn } from '@/lib/player';
 
 const STEPS = [
   ['1 · Read', 'A real headline from today’s news, with a snippet of the article it came from.'],
   ['2 · Twist', 'Change up to 3 words to make it false. Fewer words, more points.'],
-  ['3 · Sneak', 'Keep the suspicion meter under 50% and the detector waves it through.'],
+  ['3 · Sneak', 'Submit. If the fact-checker can’t find evidence against it, you snuck it past.'],
 ];
 
 export default function Landing() {
@@ -28,8 +28,13 @@ export default function Landing() {
     api
       .health()
       .then((h) => {
-        setStatus({ judge: h.judge, detector: h.detector });
+        setStatus({ judge: h.judge, detector: null });
         setOnline(true);
+        // The live fact-checker (the old style "detector" no longer decides anything).
+        versionsApi
+          .verifier()
+          .then((v) => setStatus({ judge: h.judge, detector: v.current }))
+          .catch(() => undefined);
       })
       .catch(() => setOnline(false));
   }, []);
@@ -61,8 +66,8 @@ export default function Landing() {
             Sneak It <span className="text-accent">Past</span>
           </h1>
           <p className="mt-4 max-w-xl text-pretty text-lg text-chalk-dim sm:text-xl">
-            Edit a true headline into a lie the AI detector can’t catch. Every trick that works
-            becomes training data — and the detector gets harder.
+            Edit a true headline into a lie the AI fact-checker can’t catch. Every trick that works
+            becomes training data — and the fact-checker gets harder.
           </p>
         </motion.div>
 
@@ -95,7 +100,7 @@ export default function Landing() {
             <p className="font-semibold text-chalk">Before you play</p>
             <p className="mt-1">
               Everything you type is <strong className="text-chalk">logged for research</strong> and used to
-              train the detector. The headlines you make are synthetic misinformation: they stay in our
+              train the fact-checker. The headlines you make are synthetic misinformation: they stay in our
               database, labelled as made-up, and are never published. Please don’t copy them anywhere
               else. We store a display name only — no email, no account.
             </p>
@@ -109,7 +114,7 @@ export default function Landing() {
           )}
           {status && (
             <p className="mt-3 text-xs text-chalk-faint">
-              Detector <span className="num">{status.detector ?? 'not trained'}</span> · judge{' '}
+              Fact-checker <span className="num">{status.detector ?? '…'}</span> · judge{' '}
               <span className="num">{status.judge}</span>
               {status.judge === 'mock' && ' (no API key: a rule-based stand-in is judging)'}
             </p>

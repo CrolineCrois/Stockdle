@@ -13,7 +13,7 @@ export function shareText(run: RunInfo): string {
   return [
     `🕵️ Sneak It Past — ${run.score.toLocaleString()} pts`,
     `✅ ${run.snuck} snuck past · 〰️ ${run.partial} partial · ❌ ${run.caught} caught · 🔥 best streak ${run.best_streak}`,
-    `vs detector ${run.detector_version}`,
+    `vs fact-checker ${run.level || run.detector_version}`,
   ].join('\n');
 }
 
@@ -51,7 +51,7 @@ export default function ShareCard({ run }: { run: RunInfo }) {
         </div>
       </div>
       <p className="mt-3 text-xs text-chalk-faint">
-        vs detector <span className="num">{run.detector_version}</span> · scores only, no headlines
+        vs fact-checker <span className="num">{run.level || run.detector_version}</span> · scores only, no headlines
       </p>
       <button type="button" onClick={() => void share()} className="btn-ghost mt-4 w-full">
         {copied ? 'Copied!' : 'Share result'}

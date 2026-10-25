@@ -71,9 +71,8 @@ export default function Board() {
               </p>
               <p className="mt-2 text-xs text-chalk-dim">
                 <span className="font-semibold text-chalk">{x.player}</span> ·{' '}
-                <span className="num">{x.points.toLocaleString()}</span> pts · suspicion{' '}
-                <span className="num">{Math.round((x.suspicion ?? 0) * 100)}%</span> vs{' '}
-                <span className="num">{x.detector_version}</span>
+                <span className="num">{x.points.toLocaleString()}</span> pts · first glance{' '}
+                <span className="num">{Math.round((x.suspicion ?? 0) * 100)}%</span> suspicious
               </p>
             </article>
           ))}
